@@ -99,6 +99,9 @@ def slicer(image_name, slice_size, out_dir):
 				out_name = '{}{}_i{}_j{}{}'.format(out_dir,
 					filename[filename.rindex('/'):-10],i,j,file_ext)
 				#print('\tout_name: ', out_name)
+				if('/color_normalized/' in out_name):
+					raise Exception('Error: trying to write image in wrong path=', out_name)
+					exit()
 				s.save(out_name)
 				slices_names.append(out_name)
 				#print('\tsaved slice in ', out_name)
@@ -146,6 +149,15 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 					# no patch/tile found in this location
 					# this means no tissue in this location found
 					continue
+				#check if npy file already exists
+				file_out_name = 'gfv_{}_{}{}'.format(class_name, img_id[:-6], k)
+				#print('file_out_name: ', file_out_name)
+				file_out_path = os.path.join(out_dir, file_out_name)
+				if(os.path.exists(file_out_path+'.npy')):
+					print('npy file exists: ', file_out_path)
+					break
+				else:
+					print('npy file does not exits: ', file_out_path)
 				name = patches[0]
 				print('\t[{}/{}] : {}'.format(i, len(x_y_pairs), name))
 				name_only, ext = os.path.splitext(name)

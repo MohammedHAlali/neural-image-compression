@@ -10,13 +10,14 @@ import os
 import numpy as np
 import random
 from scipy.ndimage.morphology import distance_transform_edt
-import keras
-from vectorize_wsi import vectorize_wsi
+import tensorflow as tf
+from tensorflow import keras
+#import keras
+#from vectorize_wsi import vectorize_wsi
 import sys
+import glob
 
-
-def encode_wsi_npy(encoder, wsi_pattern, batch_size, output_path, output_preview_pattern=None,
-                   output_distance_map=True):
+def encode_wsi_npy(encoder, input_path, output_path):
     """
     Featurizes a vectorized WSI taking augmentations into account. Augments indexes and patches properly.
 
@@ -33,31 +34,58 @@ def encode_wsi_npy(encoder, wsi_pattern, batch_size, output_path, output_preview
     """
 
     # Check if encoder accepts 128x128 patches
-    if encoder.layers[0].input_shape[1] == 64:
-        encoder = add_downsample_to_encoder(encoder)
-    elif encoder.layers[0].input_shape[1] == 128:
-        pass
-    else:
-        raise Exception('Model input size not supported.')
+    #if encoder.layers[0].input_shape[1] == 64:
+    #    encoder = add_downsample_to_encoder(encoder)
+    #elif encoder.layers[0].input_shape[1] == 128:
+    #    pass
+    #else:
+    #    raise Exception('Model input size not supported.')
+
+    print('input path: ', input_path)
 
     # Read wsi
-    wsi_sequence = WsiNpySequence(wsi_pattern=wsi_pattern, batch_size=batch_size)
+    #wsi_sequence = WsiNpySequence(wsi_pattern=wsi_pattern, batch_size=batch_size)
 
     # Config
-    xs = wsi_sequence.xs
-    ys = wsi_sequence.ys
-    image_shape = wsi_sequence.image_shape
+    #xs = wsi_sequence.xs
+    #ys = wsi_sequence.ys
+    #image_shape = wsi_sequence.image_shape
 
-    # Predict
-    patch_features = encoder.predict_generator(generator=wsi_sequence, steps=len(wsi_sequence), verbose=1)
-    features = np.ones((patch_features.shape[1], image_shape[1], image_shape[0])) * np.nan
-
+    # get npy files
+    cases = os.listdir(input_path)
+    for j, c in enumerate(cases):
+        print('[{}/{}]: {}'.format(j, len(cases), c))
+        case_path = os.path.join(input_path, c)
+        print('case path: ', case_path)
+        files = glob.glob(os.path.join(case_path, '*.npy'))
+        print('Number of npy files: ', len(files))
+        gfv = np.ones((64, 64, 128)) * np.nan
+        print('gfv shape: ', gfv.shape)
+        for i, f in enumerate(files):
+            print('[{}/{}]: {}'.format(i, len(files), f))
+            
+            x_index = int(f[-8:-7])
+            y_index = int(f[-5:-4])
+            print('x={}, y={}'.format(x_index, y_index))
+            arr = np.load(f)
+            print('loaded shape: ', arr.shape)
+            arr = np.expand_dims(arr, 0)
+            # predict
+            a_feature = encoder.predict(arr)
+            print('encoding shape: ', a_feature.shape)
+            amin = np.amin(a_feature)
+            amax = np.amax(a_feature)
+            amean = np.mean(a_feature)
+            print('min={}, max={}, mean={}'.format(amin, amax, amean))
+            # store the feature in the right spatial position
+            gfv[x_index, y_index] = a_feature
+        print('gfv shape: ', gfv.shape)
     # Store each patch feature in the right spatial position
-    for patch_feature, x, y in zip(patch_features, xs, ys):
-        features[:, y, x] = patch_feature
+    #for patch_feature, x, y in zip(patch_features, xs, ys):
+    #    features[:, y, x] = patch_feature
 
     # Populate NaNs
-    features[np.isnan(features)] = 0
+    gfv[np.isnan(gfv)] = 0
 
     # Save to disk float16
     np.save(output_path, features.astype('float16'))
@@ -229,46 +257,42 @@ def add_downsample_to_encoder(model):
     return encoder
 
 if __name__ == '__main__':
-
+    #run as: 
+    # python featurize_wsi.py TCGA-A8-A07S-01Z-00-DX1.svs out/ 1000 1 1 models/encoders_patches_pathology/encoder_contrastive.h5 1
     # Paths
-    image_path = sys.argv[1]
-    mask_path = sys.argv[2]
-    output_dir = sys.argv[3]
-    image_level = int(sys.argv[4])
-    mask_level = int(sys.argv[5])
-    patch_size = int(sys.argv[6])
-    stride = int(sys.argv[7])
-    downsample = int(sys.argv[8])
-    model_path = sys.argv[9]
-    batch_size = sys.argv[10]
-    filename = splitext(basename(image_path))[0]
-    output_pattern = join(output_dir, filename + '_{item}.npy')
-    output_path = join(output_dir, filename + '_features.npy')
-    output_preview_pattern = join(output_dir, filename + '_{f_min}_{f_max}_features.png')
+    input_path = '/common/deogun/alali/data/color_normalized_npy/train/'
+    output_path = 'data/'
+    #patch_size = int(sys.argv[4])
+    #stride = int(sys.argv[4])
+    #downsample = int(sys.argv[5])
+    model_path = sys.argv[1]
+    #batch_size = sys.argv[4]
+    #filename = splitext(basename(image_path))[0]
+    #output_pattern = join(output_dir, filename + '_{item}.npy')
+    #output_path = join(output_dir, filename + '_features.npy')
+    #output_preview_pattern = join(output_dir, filename + '_{f_min}_{f_max}_features.png')
 
     # Vectorize slide
     vectorize_wsi(
         image_path=image_path,
-        mask_path=image_path,
         output_pattern=output_pattern,
-        image_level=image_level,
-        mask_level=mask_level,
         patch_size=patch_size,
         stride=stride,
         downsample=downsample
     )
-
+    
+    print('model path: ', model_path)
     # Load encoder model
     encoder = keras.models.load_model(
         filepath=model_path
     )
-
+    encoder.summary()
     # Featurize (encode) image
     encode_wsi_npy(
         encoder=encoder,
-        wsi_pattern=output_pattern,
-        batch_size=batch_size,
+        input_path=input_path,
+        #batch_size=batch_size,
         output_path=output_path,
-        output_preview_pattern=output_preview_pattern,
-        output_distance_map=True
+        #output_preview_pattern=None,
+        #output_distance_map=True
     )

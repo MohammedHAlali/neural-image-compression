@@ -10,9 +10,14 @@ import numpy as np
 from skimage.transform import downscale_local_mean
 from matplotlib.image import imsave
 import time
+import openslide
 
 
-def vectorize_wsi(image_path, mask_path, output_pattern, image_level, mask_level, patch_size, stride, downsample=1):
+def vectorize_wsi(image_path, output_pattern, patch_size, stride, image_level=0, downsample=1):
+    print('image_path: ', image_path)
+    print('output_pattern: ', output_pattern)
+    print('patch_size: ', patch_size)
+    print('stride: ', stride)
     """
     Converts a whole-slide image into a numpy array with valid tissue patches for fast processing. It writes the
     following files for a given output pattern of '/path/normal_001_{item}.npy':
@@ -37,10 +42,7 @@ def vectorize_wsi(image_path, mask_path, output_pattern, image_level, mask_level
     # Read slide
     si = SlideIterator(
         image_path=image_path,
-        mask_path=mask_path,
         image_level=image_level,
-        mask_level=mask_level,
-        threshold_mask=0.6,
         load_data=True
     )
 
@@ -58,7 +60,7 @@ class SlideIterator(object):
     Loads a pair of mr-image and mask at a given level and yields valid tissue patches.
     """
 
-    def __init__(self, image_path, mask_path, image_level, mask_level, threshold_mask=0.6, load_data=True):
+    def __init__(self, image_path, image_level, load_data=True):
         """
         Loads a pair of mr-image and mask at a given level and yields valid tissue patches.
 
@@ -72,12 +74,9 @@ class SlideIterator(object):
         """
 
         self.image_path = image_path
-        self.mask_path = mask_path
         self.image_level = image_level
-        self.mask_level = mask_level
         self.image_shape = None
-        self.threshold_mask = threshold_mask
-
+        
         if load_data:
             self.load_data()
 
@@ -91,24 +90,27 @@ class SlideIterator(object):
             raise Exception('WSI file does not exist in: %s' % str(self.image_path))
 
         # Load image
-        image_reader = mri.MultiResolutionImageReader()
-        self.image = image_reader.open(self.image_path)
-        self.image_shape = self.image.getLevelDimensions(self.image_level)
-        self.image_level_multiplier = self.image.getLevelDimensions(0)[0] // self.image.getLevelDimensions(1)[0]
+        print('trying to open image:', self.image_path)
+        self.image = openslide.OpenSlide(self.image_path)
+        print('opended im: ', self.image)
+        print('slide levels dimensions: ', self.image.level_dimensions)
+        print('chosen level: ', self.image_level)
+        self.image_shape = self.image.level_dimensions[self.image_level]
+        print('image shape: ', self.image_shape)
+        dim0 = self.image.level_dimensions[self.image_level][0]
+        dim1 = self.image.level_dimensions[self.image_level][1]
+        print('chosen dimensions: ', dim0, ' ', dim1)
+        #image_reader = mri.MultiResolutionImageReader()
+        #self.image = image_reader.open(self.image_path)
+        #self.image_shape = self.image.getLevelDimensions(self.image_level)
+        self.image_level_multiplier = dim0 // dim1
+        print('self image level multiplier: ', self.image_level_multiplier)
+	 #self.image.getLevelDimensions(0)[0] // self.image.getLevelDimensions(1)[0]
 
-        # Load mask
-        mask_reader = mri.MultiResolutionImageReader()
-        self.mask = mask_reader.open(self.mask_path)
-        self.mask_shape = self.mask.getLevelDimensions(self.mask_level)
-        self.mask_level_multiplier = self.mask.getLevelDimensions(0)[0] // self.mask.getLevelDimensions(1)[0]
-
-        # Check dimensions
-        if self.image_shape != self.mask_shape:
-            self.image_mask_ratio = int(self.image_shape[0] / self.mask_shape[0])
-        else:
-            self.image_mask_ratio = 1
+        
 
     def get_image_shape(self, stride):
+        print('get image shape')
         """
         Returns the image shape divided by the specified stride.
 
@@ -124,6 +126,7 @@ class SlideIterator(object):
             return None
 
     def iterate_patches(self, patch_size, stride, downsample=1):
+        print('iterate patches')
         """
         Creates an iterator across valid patches in the mr-image (only non-empty mask patches qualify). It yields
         a tuple with:
@@ -137,46 +140,44 @@ class SlideIterator(object):
             downsample (int): downsample patches and indexes (useful for half-level images).
         """
 
-        # Iterate through all image patches
+        print('Iterate through all image patches')
         self.feature_shape = self.get_image_shape(stride)
-        for index_y in tqdm(range(0, self.image_shape[1], stride)):
+        print('feature shape: ', self.feature_shape)
+        for index_y in range(0, self.image_shape[1], stride):
             for index_x in range(0, self.image_shape[0], stride):
-
+                #print('[y={}, x={}]'.format(index_y, index_x))
                 # Avoid numerical issues by using the feature size
                 if (index_x // stride >= self.feature_shape[0]) or (index_y // stride >= self.feature_shape[1]):
+                    print('go to next step')
                     continue
 
-                # Retrieve mask patch
-                mask_tile = self.mask.getUCharPatch(
-                    int((index_x * (self.mask_level_multiplier ** self.mask_level)) / self.image_mask_ratio),
-                    int((index_y * (self.mask_level_multiplier ** self.mask_level)) / self.image_mask_ratio),
-                    patch_size,
-                    patch_size,
-                    self.mask_level
-                )[:, :, 0].flatten()
+                # Retrieve image patch
+                x_part = int(index_x * (self.image_level_multiplier ** self.image_level))
+                y_part = int(index_y * (self.image_level_multiplier ** self.image_level))
+                print('retrieving image patch: x={}, y={}'.format(x_part, y_part))
+                #similar to read_region in OpenSlide()
+                image_tile = self.image.read_region(location=(x_part, y_part), 
+								level=self.image_level, 
+								size=(patch_size, patch_size))
+                image_tile = np.array(image_tile).astype('uint8')
+                print('image tile: ', image_tile)
+                #image_tile = self.image.getUCharPatch(
+                #        x_part,
+                #        y_part,
+                #        patch_size,
+                #        patch_size,
+                #        self.image_level
+                # ).astype('uint8')
 
-                # Remove 255 values (filling).
-                mask_tile[mask_tile == 255] = 0
-
-                # Continue only if it is full of tissue.
-                if mask_tile.mean() > self.threshold_mask:
-
-                    # Retrieve image patch
-                    image_tile = self.image.getUCharPatch(
-                        int(index_x * (self.image_level_multiplier ** self.image_level)),
-                        int(index_y * (self.image_level_multiplier ** self.image_level)),
-                        patch_size,
-                        patch_size,
-                        self.image_level
-                    ).astype('uint8')
-
-                    # Downsample
-                    if downsample != 1:
-                        image_tile = downscale_local_mean(image_tile, (downsample, downsample, 1)).astype('uint8')
+                 # Downsample
+                if downsample != 1:
+                    image_tile = downscale_local_mean(image_tile, (downsample, downsample, 1)).astype('uint8')
                         # image_tile = image_tile[::downsample, ::downsample, :]  # faster
 
-                    # Yield
-                    yield (image_tile, index_x // stride, index_y // stride)
+                # Yield
+                ret = (image_tile, index_x // stride, index_y // stride)
+                print('yielding: ', ret)
+                yield ret
 
     def save_array(self, patch_size, stride, output_pattern, downsample=1):
         """
@@ -195,7 +196,7 @@ class SlideIterator(object):
             output_pattern (str): path to write output files.
             downsample (int): downsample patches and indexes (useful for half-level images).
         """
-
+        print('save array')
         # Paths
         filename = splitext(basename(output_pattern))[0]
         safety_path = join(dirname(output_pattern), filename + '.png')
@@ -208,6 +209,7 @@ class SlideIterator(object):
         xs = []
         ys = []
         for image_tile, x, y in self.iterate_patches(patch_size, stride, downsample=downsample):
+            print('getting image tile={}, x={}, y={}'.format(image_tile, x, y))
             image_tiles.append(image_tile)
             xs.append(x)
             ys.append(y)
@@ -235,12 +237,9 @@ if __name__ == '__main__':
     # Vectorize slide
     vectorize_wsi(
         image_path=sys.argv[1],
-        mask_path=sys.argv[2],
-        output_pattern=sys.argv[3],
-        image_level=sys.argv[4],
-        mask_level=sys.argv[5],
-        patch_size=int(sys.argv[6]),
-        stride=int(sys.argv[7]),
-        downsample=int(sys.argv[8])
+        output_pattern=sys.argv[2],
+        image_level=sys.argv[3],
+        patch_size=int(sys.argv[4]),
+        stride=int(sys.argv[5]),
+        downsample=int(sys.argv[6])
     )
-
