@@ -65,15 +65,15 @@ def slicer(image_name, slice_size, out_dir):
 	splitted = os.path.normpath(out_dir).split(os.path.sep)
 	temp = splitted[5]
 	splitted[5] = temp+'128'
-	print('\t splitted: ', splitted)
+	#print('\t splitted: ', splitted)
 	dest = '/'
 	for d in splitted[1:]:
 		dest = os.path.join(dest, d)
 		#print('dest: ', dest)
 		if(not os.path.exists(dest)):
 			os.mkdir(dest)
-			print('directory created: ', dest)
-	print('new dest: ', dest)
+			#print('directory created: ', dest)
+	#print('\tnew dest: ', dest)
 	out_dir = dest
 	slices_names = glob.glob(os.path.join(out_dir, '*.png'))
 	if(len(slices_names) == 64):
@@ -112,19 +112,25 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 	print('process id: ', pid)
 	print('loading model from: ', model_path)
 	encoder = load_model(model_path, compile=False)
-	#encoder.summary()
-	#for l in encoder.layers:
-	#	print('layer: ', l)
-	#	print('type: ', type(l))
-	#	print('input shape: ', l.input_shape)
+	encoder.summary()
+	for l in encoder.layers:
+		print('layer: ', l)
+		print('type: ', type(l))
+		print('input shape: ', l.input_shape)
+		for i, sh in enumerate(l.input_shape):
+			print(i, '- input shape: ', sh)
 	# Check if encoder accepts 128x128 patches
-	#if encoder.layers[0].input_shape[1] == 64:
-	#	encoder = add_downsample_to_encoder(encoder)
-	#elif encoder.layers[0].input_shape[1] == 128:
-	#	pass
-	#else:
-	#	raise Exception('Model input size not supported.')
-	#encoder.summary()
+	print('encoder.layer[0]: ', encoder.layers[0])
+	print('input shape: ', encoder.layers[0].input_shape[0][1])
+	if encoder.layers[0].input_shape[0][1] == 64:
+		encoder = add_downsample_to_encoder(encoder)
+		print('add 64 sized layer')
+		encoder.summary()
+	elif encoder.layers[0].input_shape[0][1] == 128:
+		pass
+	else:
+		raise Exception('Model input size not supported.')
+	encoder.summary()
 	for i,case_path in enumerate(case_id_paths):
 		print('[{}/{}]: {}'.format(i, len(case_id_paths), case_path))
 		x_y_pairs = get_pairs(case_path)
@@ -136,6 +142,14 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 		#print('image_id: ', img_id)
 		for k in range(3): #generate three times as many data
 			print('-------------Generate iteration#', k, ' ------pid=',pid,'-------------')
+			#check if npy file already exists
+			file_out_name = 'gfv_{}_{}{}'.format(class_name, img_id[:-6], k)
+			file_out_path = os.path.join(out_dir, file_out_name)
+			if(os.path.exists(file_out_path+'.npy')):
+				print('file exists: ', file_out_path)
+				continue
+			else:
+				print('file does NOT exists')
 			global_feature_vector = np.ones((200*8, 200*8, encoding_size))*np.nan
 			print('global feature vector shape: ', global_feature_vector.shape)
 			img_number_of_features = 0
@@ -149,15 +163,6 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 					# no patch/tile found in this location
 					# this means no tissue in this location found
 					continue
-				#check if npy file already exists
-				file_out_name = 'gfv_{}_{}{}'.format(class_name, img_id[:-6], k)
-				#print('file_out_name: ', file_out_name)
-				file_out_path = os.path.join(out_dir, file_out_name)
-				if(os.path.exists(file_out_path+'.npy')):
-					print('npy file exists: ', file_out_path)
-					break
-				else:
-					print('npy file does not exits: ', file_out_path)
 				name = patches[0]
 				print('\t[{}/{}] : {}'.format(i, len(x_y_pairs), name))
 				name_only, ext = os.path.splitext(name)
@@ -167,7 +172,7 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 				
 				mini_feature_vector = np.ones((8, 8, encoding_size)) * np.nan
 				for ii, s in enumerate(slices_names):
-					print('\t\t[{}/{}] slice: {}'.format(ii, len(slices_names), s[41:]))
+					#print('\t\t[{}/{}] slice: {}'.format(ii, len(slices_names), s[41:]))
 					x_index = int(s[-8:-7])
 					y_index = int(s[-5:-4])
 					#print('\t\tx={}, y={}'.format(x_index, y_index))
@@ -259,6 +264,23 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 			print(figname , ' was saved')
 			#print('heatmap saved')
 	print('-----done process:', os.getpid())
+
+#source:
+#https://github.com/davidtellez/neural-image-compression/blob/master/featurize_wsi.py
+def add_downsample_to_encoder(model):
+
+    """
+    Adds downsampling layer to input (useful for BiGAN encoder trained with 64x64 patches).
+    """
+
+    input_layer = tf.keras.layers.Input((128, 128, 3))
+    x = tf.keras.layers.AveragePooling2D()(input_layer)
+    x = model(x)
+
+    encoder = tf.keras.models.Model(inputs=input_layer, outputs=x)
+
+    return encoder
+
 if(__name__ == "__main__"):
 	print('main process id: ', os.getpid())
 	n_cores = mlt.cpu_count()
