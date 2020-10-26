@@ -113,12 +113,12 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 	print('loading model from: ', model_path)
 	encoder = load_model(model_path, compile=False)
 	encoder.summary()
-	for l in encoder.layers:
-		print('layer: ', l)
-		print('type: ', type(l))
-		print('input shape: ', l.input_shape)
-		for i, sh in enumerate(l.input_shape):
-			print(i, '- input shape: ', sh)
+	#for l in encoder.layers:
+	#	print('layer: ', l)
+	#	print('type: ', type(l))
+	#	print('input shape: ', l.input_shape)
+	#	for i, sh in enumerate(l.input_shape):
+	#		print(i, '- input shape: ', sh)
 	# Check if encoder accepts 128x128 patches
 	print('encoder.layer[0]: ', encoder.layers[0])
 	print('input shape: ', encoder.layers[0].input_shape[0][1])
