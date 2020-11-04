@@ -44,9 +44,9 @@ def get_pairs(case_path):
 			x_indices.append(x)
 		if(not y in y_indices):
 			y_indices.append(y)
-	print('x_indices=', x_indices)
+	#print('x_indices=', x_indices)
 	x_dim = np.max(np.array(x_indices).astype('int'))
-	print('y_indices=', y_indices)
+	#print('y_indices=', y_indices)
 	y_dim = np.max(np.array(y_indices).astype('int'))
 	if(x_dim > 200 or y_dim > 200):
 		print('ERROR: found big max, x_dim={}, y_dim={}'.format(x_dim, y_dim))
@@ -79,7 +79,7 @@ def slicer(image_name, slice_size, out_dir):
 	if(len(slices_names) == 64):
 		return slices_names
 	elif(len(slices_names) > 0):
-		raise Exception('ERROR: not complete slices available, len=', len(slices_names))
+		raise Exception('ERROR: not complete slices available in path={}, len={}'.format(len(out_dir), slices_names))
 	elif(len(slices_names) == 0): #no slices available, create them now
 		filename, file_ext = os.path.splitext(image_name)
 		try:
@@ -107,12 +107,61 @@ def slicer(image_name, slice_size, out_dir):
 				#print('\tsaved slice in ', out_name)
 	return slices_names
 
+def save_n_plot_arr(arr, file_out_name):
+    file_out_path = os.path.join(out_dir, file_out_name)
+    np.save(file_out_path, arr)
+    print(file_out_path, ', saved')
+    #plot pairplot of values that are not zero
+    z, x, y = arr.nonzero()
+    df_3d = pd.DataFrame()
+    df_3d['x'] = x
+    df_3d['y'] = y
+    df_3d['z'] = z
+    sns.pairplot(df_3d)
+    plt.show()
+    filename = '{}_pairplot.png'.format(file_out_path)
+    plt.savefig(filename, dpi=300)
+    plt.clf()
+    gfv_mean = np.mean(arr, axis=2)
+    print('gfv 2d shape: ', gfv_2d.shape)
+    ax = sns.heatmap(gfv_mean, vmin=0, vmax=1)
+    plt.savefig(file_out_path+'_mean.png', dpi=300)
+    plt.clf()
+    tsne = TSNE()
+    x_2d = tsne.fit_transform(gfv_mean)
+    plt.scatter(x_2d[:, 0], x_2d[:, 1])
+    plt.show()
+    figname = '{}_tsne.png'.format(file_out_path)
+    plt.savefig(figname)
+    plt.clf()
+    print(figname , ' was saved')
+
+def augment(arr, class_name, image_id):
+    image_id = image_id[:-6]
+    #vertically flip the original array and save
+    ver_flip = np.flip(arr, 0)
+    file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '1')
+    #print(file_out_path, ', saved')
+    save_n_plot_arr(ver_flip, file_out_name)
+
+    hor_flip = np.flip(arr, 1)
+    file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '2')
+    save_n_plot_arr(hor_flip, file_out_name)
+
+    rot90 = np.rot90(arr)
+    file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '3')
+    save_n_plot_arr(rot90, file_out_name)
+
+    rot180 = np.rot90(arr, 2)
+    file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '4')
+    save_n_plot_arr(rot180, file_out_name)
+
 def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_size=128):
 	pid = os.getpid()
 	print('process id: ', pid)
 	print('loading model from: ', model_path)
 	encoder = load_model(model_path, compile=False)
-	encoder.summary()
+	#encoder.summary()
 	#for l in encoder.layers:
 	#	print('layer: ', l)
 	#	print('type: ', type(l))
@@ -125,12 +174,11 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 	if encoder.layers[0].input_shape[0][1] == 64:
 		encoder = add_downsample_to_encoder(encoder)
 		print('add 64 sized layer')
-		encoder.summary()
+		#encoder.summary()
 	elif encoder.layers[0].input_shape[0][1] == 128:
 		pass
 	else:
 		raise Exception('Model input size not supported.')
-	encoder.summary()
 	for i,case_path in enumerate(case_id_paths):
 		print('[{}/{}]: {}'.format(i, len(case_id_paths), case_path))
 		x_y_pairs = get_pairs(case_path)
@@ -140,129 +188,93 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 		#print('first image: ', files_list[0])
 		img_id = first_image[:30]
 		#print('image_id: ', img_id)
-		for k in range(3): #generate three times as many data
-			print('-------------Generate iteration#', k, ' ------pid=',pid,'-------------')
-			#check if npy file already exists
-			file_out_name = 'gfv_{}_{}{}'.format(class_name, img_id[:-6], k)
-			file_out_path = os.path.join(out_dir, file_out_name)
-			if(os.path.exists(file_out_path+'.npy')):
-				print('file exists: ', file_out_path)
-				continue
-			else:
-				print('file does NOT exists')
-			global_feature_vector = np.ones((200*8, 200*8, encoding_size))*np.nan
-			print('global feature vector shape: ', global_feature_vector.shape)
-			img_number_of_features = 0
-			for i, (x,y) in enumerate(x_y_pairs):
-				image_name = '{}/*region{}-{}_*.png'.format(case_path, x, y)
-				#print('[{}/{}] image name: {}'.format(i, len(x_y_pairs), image_name))
-				patches = glob.glob(image_name)
-				#print('patches: ', patches)
-				#if this patch of location [i,j] is actually available
-				if(len(patches) == 0):
-					# no patch/tile found in this location
-					# this means no tissue in this location found
-					continue
-				name = patches[0]
-				print('\t[{}/{}] : {}'.format(i, len(x_y_pairs), name))
-				name_only, ext = os.path.splitext(name)
-				slices_names = slicer(name, 128, os.path.join(case_path, name_only))
-				if(len(slices_names) != 64):
-					raise Exception('ERROR: irregular number of slices = ', len(slices_names))
+		#check if npy file already exists
+		file_out_name = 'gfv_{}_{}{}'.format(class_name, img_id[:-6], '0') #original image
+		file_out_path = os.path.join(out_dir, file_out_name)
+		if(os.path.exists(file_out_path+'.npy')):
+			print('file exists: ', file_out_path)
+			arr = np.load(file_out_path+'.npy')
+			print('loaded shape: ', arr.shape)
+			augment(arr, class_name, img_id)
+			continue
+		else:
+			print('file does NOT exists: ', file_out_path)
+			#continue
+		global_feature_vector = np.ones((200*8, 200*8, encoding_size))*np.nan
+		print('global feature vector shape: ', global_feature_vector.shape)
+		img_number_of_features = 0
+		for i, (x,y) in enumerate(x_y_pairs):
+			image_name = '{}/*region{}-{}_*.png'.format(case_path, x, y)
+			#print('[{}/{}] image name: {}'.format(i, len(x_y_pairs), image_name))
+			patches = glob.glob(image_name)
+			#print('patches: ', patches)
+			#if this patch of location [i,j] is actually available
+			name = patches[0]
+			print('\t[{}/{}] : {}'.format(i, len(x_y_pairs), name))
+			name_only, ext = os.path.splitext(name)
+			slices_names = slicer(name, 128, os.path.join(case_path, name_only))
+			if(len(slices_names) != 64):
+				raise Exception('ERROR: irregular number of slices = ', len(slices_names))
+			
+			mini_feature_vector = np.ones((8, 8, encoding_size)) * np.nan
+			for ii, s in enumerate(slices_names):
+				#print('\t\t[{}/{}] slice: {}'.format(ii, len(slices_names), s[41:]))
+				x_index = int(s[-8:-7])
+				y_index = int(s[-5:-4])
+				#print('\t\tx={}, y={}'.format(x_index, y_index))
+				index = s.index('TCGA')
+				img = image.load_img(s)
+				img = image.img_to_array(img)
+				img = img / 255.
+				img = np.expand_dims(img, axis=0)
+				slice_name = s[index:-4]
+				an_encoding = encoder.predict(img).squeeze()
+				amax = np.amax(an_encoding)
+				amin = np.amin(an_encoding)
+				amean = np.mean(an_encoding)
+				#print('\t\tencoding shape: ', an_encoding.shape)
+				#print('\t\tmin={:.4f}, mean={:.4f}, max={:.4f}'.format(amin, amean, amax))
+				if(an_encoding.shape[0] != (encoding_size)):
+					raise Exception('\t\tERROR: encoding shape not 64x64, but shape=', an_encoding.shape)
+				target = mini_feature_vector[x_index,y_index]
+				if(not np.isnan(np.sum(target))): 
+					#make sure that the position is empty before inserting
+					#otherwise there is an error
+					raise Exception('\t\tERROR: not empty element: [x={},y={}]={}:'.format(x_index,y_index, target))
+				#fill the empty mini feature vector with x, y indices
+				#put the encoding back to its original position
+				mini_feature_vector[x_index, y_index] = an_encoding
 				
-				mini_feature_vector = np.ones((8, 8, encoding_size)) * np.nan
-				for ii, s in enumerate(slices_names):
-					#print('\t\t[{}/{}] slice: {}'.format(ii, len(slices_names), s[41:]))
-					x_index = int(s[-8:-7])
-					y_index = int(s[-5:-4])
-					#print('\t\tx={}, y={}'.format(x_index, y_index))
-					index = s.index('TCGA')
-					img = image.load_img(s)
-					img = image.img_to_array(img)
-					img = img / 255.
-					img = np.expand_dims(img, axis=0)
-					slice_name = s[index:-4]
-					an_encoding = encoder.predict(img).squeeze()
-					amax = np.amax(an_encoding)
-					amin = np.amin(an_encoding)
-					amean = np.mean(an_encoding)
-					#print('\t\tencoding shape: ', an_encoding.shape)
-					#print('\t\tmin={:.4f}, mean={:.4f}, max={:.4f}'.format(amin, amean, amax))
-					if(an_encoding.shape[0] != (encoding_size)):
-						raise Exception('\t\tERROR: encoding shape not 64x64, but shape=', an_encoding.shape)
-					target = mini_feature_vector[x_index,y_index]
-					if(not np.isnan(np.sum(target))): 
-						#make sure that the position is empty before inserting
-						#otherwise there is an error
-						raise Exception('\t\tERROR: not empty element: [x={},y={}]={}:'.format(x_index,y_index, target))
-					#fill the empty mini feature vector with x, y indices
-					#put the encoding back to its original position
-					mini_feature_vector[x_index, y_index] = an_encoding
-					
-					'''
-					This baseline method transfers 128x128 tiles to 128 vector
-					We transfer 1024x1024 to 128 vector
-					To use this baseline method, we need to transfer our 1024x1024 tile to
-					64 tiles of size 128x128, then we'll have 64 vectors of size 128 instead of 1 vector of size 128 in our method. So the global feature vector here will be of size [200*64=12800, 12900, 64]
+				'''
+				This baseline method transfers 128x128 tiles to 128 vector
+				We transfer 1024x1024 to 128 vector
+				To use this baseline method, we need to transfer our 1024x1024 tile to
+				64 tiles of size 128x128, then we'll have 64 vectors of size 128 instead of 1 vector of size 128 in our method. So the global feature vector here will be of size [200*64=12800, 12900, 64]
 					'''
 				
-				out_x_index = int(x)*8
-				out_y_index = int(y)*8
-				mini_feature_vector[np.isnan(mini_feature_vector)] = 0
-				print('done, mini feature vector shape: ', mini_feature_vector.shape)
-				for i_mini in range(8):
-					for j_mini in range(8):
-							#print('\tassigning gfv[{},{}] = mini[{},{}]'.format(out_x_index+i_mini, out_y_index+j_mini, i_mini, j_mini))
-							global_feature_vector[
-							out_x_index+i_mini,
-							out_y_index+j_mini] = mini_feature_vector[i_mini, j_mini]
-				print('done inserting mini feature in gfv')			
-				#shape1 = global_feature_vector[out_x_index,out_y_index].shape
-				#shape2 = mini_feature_vector.shape
-				#if(shape1 != shape2):
-				#	raise Exception('\tERROR: not equal shapes: {}!={}'.format(shape1, shape2))
-				#insert the produced feature vector 
-				#to its location within the global feature vector
-				#global_feature_vector[out_x_index,out_y_index] = mini_feature_vector
-				img_number_of_features += 1
-				#if(np.amax(feature_vector) > 1):
-				#	raise ValueError('ERROR: feature vector with max={} needs normalization'.format(amax))
-			print('finished this gfv')				
-			image_id = img_id[:-6]
-			print('total number of features in {} is {}'.format(image_id, img_number_of_features))
-			file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, k) #gfv = global_feature_vector
-			file_out_path = os.path.join(out_dir, file_out_name)
-			# Populate NaNs
-			global_feature_vector[np.isnan(global_feature_vector)] = 0
-			print('gfv shape: ', global_feature_vector.shape)
-			np.save(file_out_path, global_feature_vector) #add class_name
-			print(file_out_path, ', saved')
-			#plot pairplot of values that are not zero
-			z, x, y = global_feature_vector.nonzero()
-			df_3d = pd.DataFrame()
-			df_3d['x'] = x
-			df_3d['y'] = y
-			df_3d['z'] = z
-			sns.pairplot(df_3d)
-			plt.show()
-			filename = '{}_pairplot.png'.format(file_out_path)
-			plt.savefig(filename, dpi=300)
-			plt.clf()
-			#print('plotting heatmap')
-			gfv_mean = np.mean(global_feature_vector, axis=2)
-			#print('gfv 2d shape: ', gfv_2d.shape)
-			ax = sns.heatmap(gfv_mean, vmin=0, vmax=1)
-			plt.savefig(file_out_path+'_mean.png', dpi=300)
-			plt.clf()
-			tsne = TSNE()
-			x_2d = tsne.fit_transform(gfv_mean)
-			plt.scatter(x_2d[:, 0], x_2d[:, 1])
-			plt.show()
-			figname = '{}_tsne.png'.format(file_out_path)
-			plt.savefig(figname)
-			plt.clf()
-			print(figname , ' was saved')
-			#print('heatmap saved')
+			out_x_index = int(x)*8
+			out_y_index = int(y)*8
+			mini_feature_vector[np.isnan(mini_feature_vector)] = 0
+			print('done, mini feature vector shape: ', mini_feature_vector.shape)
+			for i_mini in range(8):
+				for j_mini in range(8):
+						#print('\tassigning gfv[{},{}] = mini[{},{}]'.format(out_x_index+i_mini, out_y_index+j_mini, i_mini, j_mini))
+						global_feature_vector[
+						out_x_index+i_mini,
+						out_y_index+j_mini] = mini_feature_vector[i_mini, j_mini]
+			print('done inserting mini feature in gfv')			
+			#shape1 = global_feature_vector[out_x_index,out_y_index].shape
+			#shape2 = mini_feature_vector.shape
+			#if(shape1 != shape2):
+			#	raise Exception('\tERROR: not equal shapes: {}!={}'.format(shape1, shape2))
+			#insert the produced feature vector 
+			#to its location within the global feature vector
+			#global_feature_vector[out_x_index,out_y_index] = mini_feature_vector
+			img_number_of_features += 1
+			#if(np.amax(feature_vector) > 1):
+			#	raise ValueError('ERROR: feature vector with max={} needs normalization'.format(amax))
+		print('finished this gfv')
+		augment(global_feature_vector, class_name, img_id)
 	print('-----done process:', os.getpid())
 
 #source:
@@ -305,11 +317,6 @@ if(__name__ == "__main__"):
 	print('folder created: ', out_dir)
 	model_path = 'models/encoders_patches_pathology/encoder_{}.h5'.format(model_name)
 	print('loading model from: ', model_path)
-	#autoencoder = load_model(model_path)
-	#autoencoder.summary()
-	#print('Getting encoder model')
-	#encoder = Model(inputs=autoencoder.input, outputs=autoencoder.get_layer('encoding').output)
-	#encoder.summary()
 	class_names = ['breast', 'colon', 'lung', 'panc', 
 			'normal_breast', 'normal_colon', 'normal_lung', 'normal_panc']
 	c = class_names[args.class_index]
@@ -320,6 +327,41 @@ if(__name__ == "__main__"):
 	print('output folder:', out_dir)
 	print('input path: ', input_path)
 	case_id_paths = glob.glob(input_path)
+	print('exploring {} case id paths'.format(len(case_id_paths)))
+	'''	
+	if(c == 'panc' and args.phase == 'train'):
+		new_case_id_paths = []
+		for cc in case_id_paths:
+			#if('panc_S4-A8RO-01Z-00-DX1' in cc): #running
+			#	new_case_id_paths.append(cc)
+			#if('panc_YY-A8LH-01Z-00-DX1' in cc):
+			#	new_case_id_paths.append(cc)
+			if('panc_US-A779-01Z-00-DX1' in cc):
+				new_case_id_paths.append(cc)
+		if(len(new_case_id_paths) == 0):
+			raise Exception('ERROR: could not find elements.')
+		else:
+			print('new id paths: ', new_case_id_paths)
+			case_id_paths = new_case_id_paths
+	if(c == 'lung' and args.phase == 'train'):
+		new_case_id_paths = []
+		for cc in case_id_paths:
+			#if('lung_49-4512-DX1' in cc): #takes more than 5 hrs #running
+			#	new_case_id_paths.append(cc)
+			#if('lung_49-4512-DX5' in cc):
+			#	new_case_id_paths.append(cc)
+			#elif('lung_49-4512-DX2' in cc):
+			#	new_case_id_paths.append(cc)
+			if('lung_05-4403' in cc):
+				new_case_id_paths.append(cc)
+			#elif('lung_62-A46U' in cc):
+			#	new_case_id_paths.append(cc)
+		if(len(new_case_id_paths) == 0):
+			raise Exception('ERROR: could not find elements.')
+		else:
+			print('new id paths: ', new_case_id_paths)
+			case_id_paths = new_case_id_paths
+	'''
 	case_id_length = len(case_id_paths)
 	print('number of case ids: ', case_id_length)
 	if(len(case_id_paths) == 0):
