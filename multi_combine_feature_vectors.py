@@ -8,9 +8,9 @@ import os
 import multiprocessing as mlt
 from sklearn.manifold import TSNE
 from image_slicer import slice
+import pandas as pd
 import numpy as np
 from PIL import Image
-import pandas as pd
 import tensorflow as tf
 import matplotlib
 matplotlib.use('agg')
@@ -109,8 +109,13 @@ def slicer(image_name, slice_size, out_dir):
 
 def save_n_plot_arr(arr, file_out_name):
     file_out_path = os.path.join(out_dir, file_out_name)
-    np.save(file_out_path, arr)
-    print(file_out_path, ', saved')
+    print('trying to save: ', file_out_path)
+    if(not os.path.exists(os.path.join(out_dir, file_out_name))):
+        np.save(file_out_path, arr)
+        print(file_out_path, ', saved')
+    else:
+        return None
+
     #plot pairplot of values that are not zero
     z, x, y = arr.nonzero()
     df_3d = pd.DataFrame()
@@ -120,8 +125,10 @@ def save_n_plot_arr(arr, file_out_name):
     sns.pairplot(df_3d)
     plt.show()
     filename = '{}_pairplot.png'.format(file_out_path)
+    print('trying to save: ', filename)
     plt.savefig(filename, dpi=300)
     plt.clf()
+    print(filename, ' SAVED')
     gfv_mean = np.mean(arr, axis=2)
     print('gfv 2d shape: ', gfv_2d.shape)
     ax = sns.heatmap(gfv_mean, vmin=0, vmax=1)
@@ -138,8 +145,12 @@ def save_n_plot_arr(arr, file_out_name):
 
 def augment(arr, class_name, image_id):
     image_id = image_id[:-6]
+    file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '0')
+    save_n_plot_arr(arr, file_out_name)
+
     #vertically flip the original array and save
     ver_flip = np.flip(arr, 0)
+    print('vertical flipped shape: ', ver_flip.shape)
     file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '1')
     #print(file_out_path, ', saved')
     save_n_plot_arr(ver_flip, file_out_name)
@@ -210,7 +221,8 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 			#print('patches: ', patches)
 			#if this patch of location [i,j] is actually available
 			name = patches[0]
-			print('\t[{}/{}] : {}'.format(i, len(x_y_pairs), name))
+			if(i % 500 == 0):
+				print('\t[{}/{}] : {}'.format(i, len(x_y_pairs), name))
 			name_only, ext = os.path.splitext(name)
 			slices_names = slicer(name, 128, os.path.join(case_path, name_only))
 			if(len(slices_names) != 64):
@@ -255,7 +267,7 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 			out_x_index = int(x)*8
 			out_y_index = int(y)*8
 			mini_feature_vector[np.isnan(mini_feature_vector)] = 0
-			print('done, mini feature vector shape: ', mini_feature_vector.shape)
+			#print('done, mini feature vector x={}, y={}'.format(x, y))
 			for i_mini in range(8):
 				for j_mini in range(8):
 						#print('\tassigning gfv[{},{}] = mini[{},{}]'.format(out_x_index+i_mini, out_y_index+j_mini, i_mini, j_mini))
@@ -273,7 +285,7 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 			img_number_of_features += 1
 			#if(np.amax(feature_vector) > 1):
 			#	raise ValueError('ERROR: feature vector with max={} needs normalization'.format(amax))
-		print('finished this gfv')
+		print('finished this gfv, img_id= ', img_id)
 		augment(global_feature_vector, class_name, img_id)
 	print('-----done process:', os.getpid())
 
@@ -320,7 +332,7 @@ if(__name__ == "__main__"):
 	class_names = ['breast', 'colon', 'lung', 'panc', 
 			'normal_breast', 'normal_colon', 'normal_lung', 'normal_panc']
 	c = class_names[args.class_index]
-	input_path = '/common/deogun/alali/data/color_normalized/{}/{}_*'.format(args.phase, c)
+	input_path = '/common/shigroup/azizank/data/color_normalized/{}/{}_*'.format(args.phase, c)
 	out_dir = os.path.join(out_dir, c)
 	if(not os.path.exists(out_dir)):
 		os.mkdir(out_dir)
