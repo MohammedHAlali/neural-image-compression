@@ -79,7 +79,7 @@ def slicer(image_name, slice_size, out_dir):
 	if(len(slices_names) == 64):
 		return slices_names
 	elif(len(slices_names) > 0):
-		raise Exception('ERROR: not complete slices available in path={}, len={}'.format(len(out_dir), slices_names))
+		raise Exception('ERROR: not complete slices available in path={}, len={}'.format(out_dir, len(out_dir)))
 	elif(len(slices_names) == 0): #no slices available, create them now
 		filename, file_ext = os.path.splitext(image_name)
 		try:
@@ -110,18 +110,21 @@ def slicer(image_name, slice_size, out_dir):
 def save_n_plot_arr(arr, file_out_name):
     file_out_path = os.path.join(out_dir, file_out_name)
     print('trying to save: ', file_out_path)
-    if(not os.path.exists(os.path.join(out_dir, file_out_name))):
-        np.save(file_out_path, arr)
-        print(file_out_path, ', saved')
-    else:
+    if(os.path.exists(os.path.join(out_dir, file_out_name))):
+        print('FILE EXISTS: ',file_out_path)
         return None
-
+    
+    np.save(file_out_path, arr)
+    print(file_out_path, ' saved')
     #plot pairplot of values that are not zero
     z, x, y = arr.nonzero()
+    print('non zero shapes: x={}, y={}, z={}'.format(x.shape, y.shape, z.shape))
     df_3d = pd.DataFrame()
     df_3d['x'] = x
     df_3d['y'] = y
     df_3d['z'] = z
+    print('pd dataframe: ', df_3d)
+    print('trying sns')
     sns.pairplot(df_3d)
     plt.show()
     filename = '{}_pairplot.png'.format(file_out_path)
@@ -146,26 +149,30 @@ def save_n_plot_arr(arr, file_out_name):
 def augment(arr, class_name, image_id):
     image_id = image_id[:-6]
     file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '0')
-    save_n_plot_arr(arr, file_out_name)
+    if(not os.path.exists(os.path.join(out_dir, file_out_name))):
+        save_n_plot_arr(arr, file_out_name)
 
     #vertically flip the original array and save
     ver_flip = np.flip(arr, 0)
     print('vertical flipped shape: ', ver_flip.shape)
     file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '1')
-    #print(file_out_path, ', saved')
-    save_n_plot_arr(ver_flip, file_out_name)
+    if(not os.path.exists(os.path.join(out_dir, file_out_name))):
+        save_n_plot_arr(ver_flip, file_out_name)
 
     hor_flip = np.flip(arr, 1)
     file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '2')
-    save_n_plot_arr(hor_flip, file_out_name)
+    if(not os.path.exists(os.path.join(out_dir, file_out_name))):
+        save_n_plot_arr(hor_flip, file_out_name)
 
     rot90 = np.rot90(arr)
     file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '3')
-    save_n_plot_arr(rot90, file_out_name)
+    if(not os.path.exists(os.path.join(out_dir, file_out_name))):
+        save_n_plot_arr(rot90, file_out_name)
 
     rot180 = np.rot90(arr, 2)
     file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '4')
-    save_n_plot_arr(rot180, file_out_name)
+    if(not os.path.exists(os.path.join(out_dir, file_out_name))):
+        save_n_plot_arr(rot180, file_out_name)
 
 def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_size=128):
 	pid = os.getpid()
@@ -180,8 +187,8 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 	#	for i, sh in enumerate(l.input_shape):
 	#		print(i, '- input shape: ', sh)
 	# Check if encoder accepts 128x128 patches
-	print('encoder.layer[0]: ', encoder.layers[0])
-	print('input shape: ', encoder.layers[0].input_shape[0][1])
+	#print('encoder.layer[0]: ', encoder.layers[0])
+	#print('input shape: ', encoder.layers[0].input_shape[0][1])
 	if encoder.layers[0].input_shape[0][1] == 64:
 		encoder = add_downsample_to_encoder(encoder)
 		print('add 64 sized layer')
@@ -274,7 +281,7 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 						global_feature_vector[
 						out_x_index+i_mini,
 						out_y_index+j_mini] = mini_feature_vector[i_mini, j_mini]
-			print('done inserting mini feature in gfv')			
+			#print('done inserting mini feature in gfv')			
 			#shape1 = global_feature_vector[out_x_index,out_y_index].shape
 			#shape2 = mini_feature_vector.shape
 			#if(shape1 != shape2):
