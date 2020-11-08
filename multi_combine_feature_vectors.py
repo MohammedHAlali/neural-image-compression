@@ -109,34 +109,39 @@ def slicer(image_name, slice_size, out_dir):
 
 def save_n_plot_arr(arr, file_out_name):
     file_out_path = os.path.join(out_dir, file_out_name)
-    print('trying to save: ', file_out_path)
+    #print('trying to save: ', file_out_path)
     if(os.path.exists(os.path.join(out_dir, file_out_name))):
         print('FILE EXISTS: ',file_out_path)
         return None
-    
+    arr = np.nan_to_num(arr)
     np.save(file_out_path, arr)
     print(file_out_path, ' saved')
     #plot pairplot of values that are not zero
-    z, x, y = arr.nonzero()
-    print('non zero shapes: x={}, y={}, z={}'.format(x.shape, y.shape, z.shape))
-    df_3d = pd.DataFrame()
-    df_3d['x'] = x
-    df_3d['y'] = y
-    df_3d['z'] = z
-    print('pd dataframe: ', df_3d)
-    print('trying sns')
-    sns.pairplot(df_3d)
-    plt.show()
-    filename = '{}_pairplot.png'.format(file_out_path)
-    print('trying to save: ', filename)
-    plt.savefig(filename, dpi=300)
-    plt.clf()
-    print(filename, ' SAVED')
+    #z, x, y = arr.nonzero()
+    #print('non zero shapes: x={}, y={}, z={}'.format(x.shape, y.shape, z.shape))
+    #df_3d = pd.DataFrame()
+    #df_3d['x'] = x
+    #df_3d['y'] = y
+    #df_3d['z'] = z
+    #print('pd dataframe shape: ', df_3d.shape)
+    #print('trying sns')
+    #sns_plot = sns.pairplot(df_3d)
+    #print('trying saving')
+    #filename = '{}_pairplot.png'.format(file_out_path)
+    #print('trying to save: ', filename)
+    #sns_plot.savefig(filename, dpi=300)
+    #plt.clf()
+    #print(filename, ' SAVED')
     gfv_mean = np.mean(arr, axis=2)
-    print('gfv 2d shape: ', gfv_2d.shape)
+    print('gfv 2d shape: ', gfv_mean.shape)
+    print('max: ', np.amax(arr))
+    print('min: ', np.amin(arr))
+    print('mean: ', np.mean(arr))
+    print('Does gfv_mean contain NaN?: ', np.any(np.isnan(gfv_mean)))
     ax = sns.heatmap(gfv_mean, vmin=0, vmax=1)
     plt.savefig(file_out_path+'_mean.png', dpi=300)
     plt.clf()
+    print('mean png file saved')
     tsne = TSNE()
     x_2d = tsne.fit_transform(gfv_mean)
     plt.scatter(x_2d[:, 0], x_2d[:, 1])
@@ -147,32 +152,53 @@ def save_n_plot_arr(arr, file_out_name):
     print(figname , ' was saved')
 
 def augment(arr, class_name, image_id):
+    print('trying to augment: ', image_id)
     image_id = image_id[:-6]
     file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '0')
-    if(not os.path.exists(os.path.join(out_dir, file_out_name))):
+    file_out_path = os.path.join(out_dir, file_out_name+'.npy')
+    if(not os.path.exists(file_out_path)):
+        print(file_out_path, ' NOT exists')
         save_n_plot_arr(arr, file_out_name)
+    else:
+        print(file_out_path, ' exists')
 
     #vertically flip the original array and save
     ver_flip = np.flip(arr, 0)
     print('vertical flipped shape: ', ver_flip.shape)
     file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '1')
-    if(not os.path.exists(os.path.join(out_dir, file_out_name))):
+    file_out_path = os.path.join(out_dir, file_out_name+'.npy')
+    if(not os.path.exists(file_out_path)):
+        print('file not exists: ', file_out_path)
         save_n_plot_arr(ver_flip, file_out_name)
+    else:
+        print(file_out_path, ' exists')
 
+    print('horizonal flipping')
     hor_flip = np.flip(arr, 1)
     file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '2')
-    if(not os.path.exists(os.path.join(out_dir, file_out_name))):
+    if(not os.path.exists(os.path.join(out_dir, file_out_name+'.npy'))):
+        print('file not exists: ', file_out_name)
         save_n_plot_arr(hor_flip, file_out_name)
+    else:
+        print(file_out_name, ' exists')
 
+    print('rotation 90 deg')
     rot90 = np.rot90(arr)
     file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '3')
-    if(not os.path.exists(os.path.join(out_dir, file_out_name))):
+    if(not os.path.exists(os.path.join(out_dir, file_out_name+'.npy'))):
+        print('file not exists: ', file_out_name)
         save_n_plot_arr(rot90, file_out_name)
+    else:
+        print(file_out_name, ' exists')
 
+    print('rotation 180 deg')
     rot180 = np.rot90(arr, 2)
     file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '4')
-    if(not os.path.exists(os.path.join(out_dir, file_out_name))):
+    if(not os.path.exists(os.path.join(out_dir, file_out_name+'.npy'))):
+        print('file not exists: ', file_out_name)
         save_n_plot_arr(rot180, file_out_name)
+    else:
+        print(file_out_name, ' exists')
 
 def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_size=128):
 	pid = os.getpid()
