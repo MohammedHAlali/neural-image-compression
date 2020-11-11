@@ -237,6 +237,7 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 		file_out_path = os.path.join(out_dir, file_out_name)
 		if(os.path.exists(file_out_path+'.npy')):
 			print('file exists: ', file_out_path)
+			#continue
 			arr = np.load(file_out_path+'.npy')
 			print('loaded shape: ', arr.shape)
 			augment(arr, class_name, img_id)
@@ -257,12 +258,12 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 			if(i % 500 == 0):
 				print('\t[{}/{}] : {}'.format(i, len(x_y_pairs), name))
 			name_only, ext = os.path.splitext(name)
-			slices_names = slicer(name, 128, os.path.join(case_path, name_only))
-			if(len(slices_names) != 64):
-				raise Exception('ERROR: irregular number of slices = ', len(slices_names))
+			slices_names1 = slicer(name, 128, os.path.join(case_path, name_only))
+			if(len(slices_names1) != 64):
+				raise Exception('ERROR: irregular number of slices = ', len(slices_names1))
 			
 			mini_feature_vector = np.ones((8, 8, encoding_size)) * np.nan
-			for ii, s in enumerate(slices_names):
+			for ii, s in enumerate(slices_names1):
 				#print('\t\t[{}/{}] slice: {}'.format(ii, len(slices_names), s[41:]))
 				x_index = int(s[-8:-7])
 				y_index = int(s[-5:-4])
