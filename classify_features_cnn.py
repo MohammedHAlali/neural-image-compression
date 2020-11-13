@@ -69,13 +69,13 @@ elif(class_type == 'all'):
 	num_classes = 8
 else:
 	raise Exception('ERROR: unknown class type: ', class_type)
-
-valid_x, valid_y = my_data_utils.load_data('valid', class_type, exp_num)
-print('valid_x, vaid_y shapes={},{}, type={}'.format(valid_x.shape, valid_y.shape, type(valid_x)))
-test_x, test_y = my_data_utils.load_data('test', class_type, exp_num)
-print('test_x, test_y shapes={},{}, type={}'.format(test_x.shape, test_y.shape, type(test_x)))
-train_x, train_y = my_data_utils.load_data('train', class_type, exp_num)
-print('train_x, train_y shapes={},{}, type={}'.format(train_x.shape, train_y.shape, type(train_x)))
+with tf.device('/cpu:0'):
+	valid_x, valid_y = my_data_utils.load_data('valid', class_type, exp_num)
+	print('valid_x, vaid_y shapes={},{}, type={}'.format(valid_x.shape, valid_y.shape, type(valid_x)))
+	test_x, test_y = my_data_utils.load_data('test', class_type, exp_num)
+	print('test_x, test_y shapes={},{}, type={}'.format(test_x.shape, test_y.shape, type(test_x)))
+	train_x, train_y = my_data_utils.load_data('train', class_type, exp_num)
+	print('train_x, train_y shapes={},{}, type={}'.format(train_x.shape, train_y.shape, type(train_x)))
 
 #if(class_type == 'all'):
 	#print('convert to categorical')

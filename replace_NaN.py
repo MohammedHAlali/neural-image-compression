@@ -7,7 +7,7 @@ import numpy as np
 
 input_path = 'data/bigan/'
 phases = os.listdir(input_path)
-for p in ['test']:
+for p in ['train']:
     print('phase: ', p)
     phase_path = os.path.join(input_path, p)
     classes = os.listdir(phase_path)

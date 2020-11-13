@@ -45,16 +45,17 @@ def load_data(phase='train', class_type='all', exp_num='huber11'):
 				continue
 			print('getting from class: ', class_path)
 			files = os.listdir(class_path)
+			np.random.shuffle(files)
 			label = int(class_dic[c])
 			if(class_type=='binary' and label <= 3):
 				label = 0 #cancer
 			elif(class_type=='binary' and label <= 7):
 				label = 1 #normal
 			print('label = ', label)
-			for f in files:
+			for i, f in enumerate(files):
 				if(not '.npy' in f):
 					continue
-				print('file: ', f)
+				print('[{}/{}] file: {} '.format(i, len(files), f))
 				arr = np.load(os.path.join(class_path, f))
 				print('loaded file shape: ', arr.shape)
 				data_list.append(arr)
