@@ -5,9 +5,9 @@ import os
 import glob
 import numpy as np
 
-input_path = 'data/bigan/'
+input_path = 'data/vae/'
 phases = os.listdir(input_path)
-for p in ['train']:
+for p in ['valid']:
     print('phase: ', p)
     phase_path = os.path.join(input_path, p)
     classes = os.listdir(phase_path)
