@@ -70,7 +70,7 @@ elif(class_type == 'all'):
 else:
 	raise Exception('ERROR: unknown class type: ', class_type)
 with tf.device('/cpu:0'):
-	valid_x, valid_y = my_data_utils.load_data('valid', class_type, exp_num)
+	valid_x, valid_y = my_data_utils.load_data_per_file('valid', class_type, exp_num)
 	print('valid_x, vaid_y shapes={},{}, type={}'.format(valid_x.shape, valid_y.shape, type(valid_x)))
 	test_x, test_y = my_data_utils.load_data('test', class_type, exp_num)
 	print('test_x, test_y shapes={},{}, type={}'.format(test_x.shape, test_y.shape, type(test_x)))
@@ -150,7 +150,7 @@ def shallow_cnn(k_reg=k_reg):
                 model.add(Dense(1))
                 model.add(Activation('sigmoid'))
         return model
-
+'''
 def deep_cnn(k_reg=k_reg):
 	model = Sequential(name='deep_model')
 	model.add(Input(shape=(200, 200, 128)))
@@ -201,7 +201,9 @@ def deep_cnn(k_reg=k_reg):
 
 if('deep' in model_name):
 	model = deep_cnn(k_reg)
-elif('shallow' in model_name):
+el
+'''
+if('shallow' in model_name):
 	model = shallow_cnn(k_reg=k_reg)
 else:
 	raise Exception('ERROR: unkonwn model name = ', model_name)
