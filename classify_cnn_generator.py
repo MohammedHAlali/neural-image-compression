@@ -19,20 +19,16 @@ from tensorflow.keras.layers import Conv2D, Activation, MaxPooling2D, Dropout, F
 import my_data_utils
 
 parser = argparse.ArgumentParser()
-parser.add_argument('model_type', help='shallow, deep')
 parser.add_argument('exp_num', help='aeX, huberX, where X > 10')
 parser.add_argument('class_type', help='binary, all')
 args = parser.parse_args()
 
-print('model type: ', args.model_type)
 print('class type: ', args.class_type)
-if('ANN' in args.model_type):
-	raise ValueError('ERROR: only CNN here, you wrote: ', args.model_type)
 
 exp_num = args.exp_num
 class_type = args.class_type
 model_index = 0
-model_name = args.model_type+'CNN'+str(model_index)
+model_name = 'CNN'+str(model_index)
 train_epochs = 100
 batch_size = 8
 
@@ -52,9 +48,9 @@ if(not os.path.exists(out_dir)):
 	os.mkdir(out_dir)
 	print('folder created: ', out_dir)
 
-train_path = 'data/{}/train'.format(exp_num)
-valid_path = 'out/{}/valid'.format(exp_num)
-test_path = 'out/{}/test'.format(exp_num)
+train_path = 'data/{}_{}/train'.format(exp_num, class_type)
+valid_path = 'out/{}_{}/valid'.format(exp_num, class_type)
+test_path = 'out/{}_{}/test'.format(exp_num, class_type)
 if(class_type == 'all'):
 	class_dic = {'bc':0, 'cc':1, 'lc':2, 'pc':3,
 		'bn':4, 'cn':5, 'ln':6, 'pn':7}
@@ -69,68 +65,23 @@ elif(class_type == 'all'):
 	num_classes = 8
 else:
 	raise Exception('ERROR: unknown class type: ', class_type)
-with tf.device('/cpu:0'):
-	my_data_utils.save_data_label('valid', class_type, exp_num)
-	print('done valid')
-	my_data_utils.save_data_label('test', class_type, exp_num)
-	print('done test')
-	my_data_utils.save_data_label('train', class_type, exp_num)
-	print('done train')
-	exit()
-	valid_x, valid_y = my_data_utils.load_data_per_file('valid', class_type, exp_num)
-	print('valid_x, vaid_y shapes={},{}, type={}'.format(valid_x.shape, valid_y.shape, type(valid_x)))
-	test_x, test_y = my_data_utils.load_data('test', class_type, exp_num)
-	print('test_x, test_y shapes={},{}, type={}'.format(test_x.shape, test_y.shape, type(test_x)))
-	train_x, train_y = my_data_utils.load_data('train', class_type, exp_num)
-	print('train_x, train_y shapes={},{}, type={}'.format(train_x.shape, train_y.shape, type(train_x)))
 
-#if(class_type == 'all'):
-	#print('convert to categorical')
-	#train_y = utils.to_categorical(train_y)
-	#valid_y = utils.to_categorical(valid_y)
-	#test_y is converted to onehot when needed
+with tf.device('/cpu:0'):
+    valid_generator = my_data_utils.DataGenerator(valid_path)
+    train_generator = my_data_utils.DataGenerator(train_path)
+    test_generator = my_data_utils.DataGenerator(test_path)  
 
 print('train shapes: ', train_x.shape, train_y.shape)
 print('valid shapes: ', valid_x.shape, valid_y.shape)
 print('test shapes: ', test_x.shape, test_y.shape)
-#print('Number of occurences for classes in train set: ', np.bincount(train_y))
-#print('Number of occurences for classes in valid set: ', np.bincount(valid_y))
-#print('Number of occurences for classes in test set: ', np.bincount(test_y))
 
 print('train max: ', np.amax(train_x))
 print('train min: ', np.amin(train_x))
 print('train mean: ', np.mean(train_x))
 
-#Normalization using Keras
-# Create a Normalization layer and set its internal state using the training data
-#normalizer = experimental.preprocessing.Normalization()
-#normalizer.adapt(train_x)
-#normalized_data = normalizer(train_x)
-#print('done keras normalizer')
-#print('train max: ', np.amax(train_x))
-#print('train min: ', np.amin(train_x))
-#print('train mean: ', np.mean(train_x))
 
 k_reg = regularizers.l2(0.001)
 
-def shallow0(k_reg=k_reg):
-	inputs = Input(shape=(200, 200, 128))
-	x = normalizer(inputs)
-	x = Conv2D(128, (3, 3), kernel_regularizer=k_reg)(x)
-	x = Activation('relu')(x)
-	x = MaxPooling2D(pool_size=(2, 2))(x)
-	x = Flatten()(x)
-	x = Dense(128, kernel_regularizer=k_reg)(x)
-	x = Activation('relu')(x)
-	x = Dropout(0.5)(x)
-	if(class_type == 'all'):
-		x = Dense(8)(x)
-		output = Activation('softmax')(x)
-	elif(class_type == 'binary'):
-		x = Dense(1)(x)
-		output = Activation('sigmoid')(x)
-	model = Model(inputs, output)
-	return model
 
 def shallow_cnn(k_reg=k_reg):
         model = Sequential(name='shallow_CNN')
@@ -157,63 +108,8 @@ def shallow_cnn(k_reg=k_reg):
                 model.add(Dense(1))
                 model.add(Activation('sigmoid'))
         return model
-'''
-def deep_cnn(k_reg=k_reg):
-	model = Sequential(name='deep_model')
-	model.add(Input(shape=(200, 200, 128)))
-	#model.add(normalizer())
-	model.add(Conv2D(128, (3, 3), kernel_regularizer=k_reg))
-	model.add(BatchNormalization())
-	model.add(Activation('relu'))
-	model.add(MaxPooling2D(pool_size=(2, 2)))
 
-	model.add(Conv2D(128, (3, 3), kernel_regularizer=k_reg))
-	model.add(BatchNormalization())
-	model.add(Activation('relu'))
-
-	model.add(Conv2D(128, (3, 3), kernel_regularizer=k_reg))
-	model.add(BatchNormalization())
-	model.add(Activation('relu'))
-	model.add(MaxPooling2D(pool_size=(2, 2)))
-
-	model.add(Conv2D(128, (3, 3), kernel_regularizer=k_reg))
-	model.add(BatchNormalization())
-	model.add(Activation('relu'))
-
-	model.add(Conv2D(64, (3, 3), kernel_regularizer=k_reg))
-	model.add(BatchNormalization())
-	model.add(Activation('relu'))
-	model.add(MaxPooling2D(pool_size=(2, 2)))
-	
-	model.add(Conv2D(64, (3, 3), kernel_regularizer=k_reg))
-	model.add(BatchNormalization())
-	model.add(Activation('relu'))
-
-	model.add(Conv2D(64, (1, 1), kernel_regularizer=k_reg))
-	model.add(BatchNormalization())
-	model.add(Activation('relu'))
-	model.add(MaxPooling2D(pool_size=(2, 2)))
-
-	model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
-	model.add(Dense(32, kernel_regularizer=k_reg))
-	model.add(Activation('relu'))
-	model.add(Dropout(0.5))
-	if(class_type == 'all'):
-		model.add(Dense(8))
-		model.add(Activation('softmax'))
-	elif(class_type == 'binary'):
-		model.add(Dense(1))
-		model.add(Activation('sigmoid'))
-	return model
-
-if('deep' in model_name):
-	model = deep_cnn(k_reg)
-el
-'''
-if('shallow' in model_name):
-	model = shallow_cnn(k_reg=k_reg)
-else:
-	raise Exception('ERROR: unkonwn model name = ', model_name)
+model = shallow_cnn(k_reg=k_reg)
 
 model.summary()
 
@@ -227,6 +123,7 @@ if(class_type == 'binary'):
 	loss = 'binary_crossentropy'
 else:
 	loss = 'sparse_categorical_crossentropy'
+
 model.compile(loss=loss,
               optimizer=optimizer,
               metrics=['accuracy'])

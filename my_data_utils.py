@@ -6,7 +6,6 @@ import os
 import scipy
 import numpy as np
 from tensorflow import keras
-'''
 
 #source link:
 # https://www.kaggle.com/datapsycho/training-large-scale-data-with-keras-and-tf
@@ -36,12 +35,28 @@ class DataGenerator(keras.utils.Sequence):
         X, y = self.__data_generation(list_IDs_temp)
 
         return X, y 
+    
     def on_epoch_end(self):
-        #  is a confusing method to indicate when epoch will end 
+        #  is a confusing method to indicate when epoch will end
+        'Updates indexes after each epoch'
+        self.indexes = np.arange(len(self.list_IDs))
     
     def __data_generation(self, list_IDs_temp):
-        # generate the selected file and associated label file by __getitem__ 	
-'''
+        # generate the selected file and associated label file by __getitem__
+        'Generates data containing batch_size samples'
+        data_loc = 'data/vae_all/train'
+        # Generate data
+        for ID in list_IDs_temp:
+            x_file_path = os.path.join(data_loc, ID)
+            y_file_path = os.path.join(data_loc, image_label_map.get(ID))
+        
+            # Store sample
+            X = np.load(x_file_path)
+   
+            # Store class
+            y = np.load(y_file_path)
+
+        return X, y
 
 def load_data_per_file(phase, class_type, exp_num):
     class_dic = {'breast':0, 'colon':1, 'lung':2, 'panc':3,
@@ -210,4 +225,44 @@ def save_data_label(phase, class_type, exp_num):
 		'normal_breast':4, 'normal_colon':5, 'normal_lung':6, 'normal_panc':7}
     class_names = class_dic.keys()
     upper_out = 'out/{}'.format(exp_num)
-    data_path = 'out/{}/features/{}'.format(exp_num, phase)
+    data_path = 'data/{}/{}'.format(exp_num, phase)
+    print('loading data from path: ', data_path)
+    out_path = 'data/{}_all/{}'.format(exp_num, phase)
+    print('saving data to path: ', out_path)
+    class_names = os.listdir(data_path)
+    print('Number of files: ', len(class_names))
+    unique_idx = 0
+    for c in class_names:
+        class_path = os.path.join(data_path, c)
+        if(not os.path.isdir(class_path)):
+            continue
+        print('getting from class: ', class_path)
+        files = os.listdir(class_path)
+        np.random.shuffle(files)
+        label = int(class_dic[c])
+        if(class_type=='binary' and label <= 3):
+            label = 0 #cancer
+        elif(class_type=='binary' and label <= 7):
+            label = 1 #normal
+        print('label = ', label)
+        for i, f in enumerate(files):
+            if(not '.npy' in f):
+                continue
+            f = os.path.join(class_path, f)
+            print('[{}/{}] file: {} '.format(i, len(files), f))
+            arr = np.load(f)
+            print('loaded file shape: ', arr.shape)
+            if(np.any(np.isnan(arr))):
+                print('yes, it contains NaNs')
+                arr = np.nan_to_num(arr)
+                print('converted NaN to 0')
+            'save data and label in out_dir with xi.npy and yi.npy'
+            data_out_path = os.path.join(out_path, 'x_{}'.format(unique_idx))
+            label_out_path = os.path.join(out_path, 'y_{}'.format(unique_idx))
+            print('trying to save : ', data_out_path)
+            np.save(data_out_path, np.array(arr))
+            print(data_out_path, ' SAVED')
+            np.save(label_out_path, np.array(label))
+            print(label_out_path, ' SAVED')
+            unique_idx += 1
+
