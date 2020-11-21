@@ -43,7 +43,7 @@ upper_out = 'out/{}'.format(exp_num)
 out_dir = '{}/{}'.format(upper_out, model_name)
 
 np.set_printoptions(precision=3)
-while(os.path.exists(out_dir)):
+while(os.path.exists(out_dir) and (len(os.listdir(out_dir)) > 0)):
 	model_index += 1
 	model_name = args.model_type+'CNN'+str(model_index)
 	out_dir = 'out/{}/{}'.format(exp_num, model_name)
@@ -53,8 +53,8 @@ if(not os.path.exists(out_dir)):
 	print('folder created: ', out_dir)
 
 train_path = 'data/{}/train'.format(exp_num)
-valid_path = 'out/{}/valid'.format(exp_num)
-test_path = 'out/{}/test'.format(exp_num)
+valid_path = 'data/{}/valid'.format(exp_num)
+test_path = 'data/{}/test'.format(exp_num)
 if(class_type == 'all'):
 	class_dic = {'bc':0, 'cc':1, 'lc':2, 'pc':3,
 		'bn':4, 'cn':5, 'ln':6, 'pn':7}

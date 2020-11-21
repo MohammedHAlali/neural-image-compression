@@ -6,6 +6,22 @@ import os
 import scipy
 import numpy as np
 from tensorflow import keras
+import tensorflow as tf
+
+def create_ds_generator(files):
+    print('we have {} files and {} labels'.format(len(files), len(labels)))
+    def get_pair(fs, ls):
+        i = 0
+        if(i >= len(files)):
+            return None
+        x = np.load(fs[i])
+        x = np.expand_dims(x, axis=0)
+        y = np.load(ls[i])
+        yield x, y
+        i += 1
+
+    dataset = tf.data.Dataset.from_generator(generator=get_pair, args=(files, labels), output_types=(np.float32, np.int32), output_shapes=((1, 1600, 1600, 128), (1)))
+    return dataset
 
 #source link:
 # https://www.kaggle.com/datapsycho/training-large-scale-data-with-keras-and-tf
@@ -14,11 +30,12 @@ class DataGenerator(keras.utils.Sequence):
         'Initialization'
         self.list_IDs = list_IDs
         self.on_epoch_end()
+        print('list_ids len: ', len(list_IDs))
     	
     def __len__(self):
         # is responsible for agetting the total number of .npy files for each epochs
         # 'Denotes the number of batches per epoch'
-        return int(len(self.list_IDs))
+        return len(self.list_IDs)
 
 
     def __getitem__(self, index):
@@ -27,9 +44,11 @@ class DataGenerator(keras.utils.Sequence):
         
         # Generate indexes of the batch
         indexes = self.indexes[index:(index+1)]
+        print('indexes: ', indexes)
 
         # Find list of IDs
         list_IDs_temp = [self.list_IDs[k] for k in indexes]
+        #print('list_ids_temp: ', list_IDs_temp)
 
         # Generate data
         X, y = self.__data_generation(list_IDs_temp)
@@ -40,22 +59,38 @@ class DataGenerator(keras.utils.Sequence):
         #  is a confusing method to indicate when epoch will end
         'Updates indexes after each epoch'
         self.indexes = np.arange(len(self.list_IDs))
+        np.random.shuffle(self.indexes)
     
     def __data_generation(self, list_IDs_temp):
         # generate the selected file and associated label file by __getitem__
         'Generates data containing batch_size samples'
-        data_loc = 'data/vae_all/train'
+        #X = np.empty((self.batch_size, *self.dim))
+        #y = np.empty((self.batch_size), dtype=int)
+        #print('created empty X shape={}, y shape={}'.format(X.shape, y.shape))
         # Generate data
-        for ID in list_IDs_temp:
-            x_file_path = os.path.join(data_loc, ID)
-            y_file_path = os.path.join(data_loc, image_label_map.get(ID))
+        #print('list_IDs_temp: ', list_IDs_temp)
+        for i, filename in enumerate(list_IDs_temp):
+            print('[{}/{}] id: {}'.format(i, len(list_IDs_temp), filename))
+            ID = filename[filename.rfind('_')+1:]
+            #print('fild ID: ', ID)
+            x_file_path = os.path.join(filename[:filename.rfind('/')], 'x_'+ID+'.npy')
+            y_file_path = os.path.join(filename[:filename.rfind('/')], 'y_'+ID+'.npy')
+            #print('tying to load data: ', x_file_path)
+            #print('tying to load label: ', y_file_path)
         
             # Store sample
             X = np.load(x_file_path)
-   
-            # Store class
-            y = np.load(y_file_path)
+            if(X.ndim < 4):
+                X = np.expand_dims(X, axis=0)
+            #print('loaded x shape: ', X.shape)
 
+            # Store class
+            y = np.load(y_file_path).astype('int')
+            y = keras.utils.to_categorical(y)
+            if(y.ndim < 2):
+                y = np.expand_dims(y, axis=0)
+            #print('loaded y shape: ', y.shape)
+            #print('label = ', y.item())
         return X, y
 
 def load_data_per_file(phase, class_type, exp_num):
@@ -227,7 +262,9 @@ def save_data_label(phase, class_type, exp_num):
     upper_out = 'out/{}'.format(exp_num)
     data_path = 'data/{}/{}'.format(exp_num, phase)
     print('loading data from path: ', data_path)
-    out_path = 'data/{}_all/{}'.format(exp_num, phase)
+    out_path = 'data/{}_{}/{}'.format(exp_num, class_type, phase)
+    if(not os.path.exists(out_path)):
+        os.mkdir(out_path)
     print('saving data to path: ', out_path)
     class_names = os.listdir(data_path)
     print('Number of files: ', len(class_names))

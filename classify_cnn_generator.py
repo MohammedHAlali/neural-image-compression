@@ -30,7 +30,7 @@ class_type = args.class_type
 model_index = 0
 model_name = 'CNN'+str(model_index)
 train_epochs = 100
-batch_size = 8
+batch_size = 2
 
 title = '{} classification of all 8 classes'.format(model_name[:-1])
 print(title)
@@ -39,18 +39,19 @@ upper_out = 'out/{}'.format(exp_num)
 out_dir = '{}/{}'.format(upper_out, model_name)
 
 np.set_printoptions(precision=3)
-while(os.path.exists(out_dir)):
+while(os.path.exists(out_dir) and (len(os.listdir(out_dir)) > 0)):
 	model_index += 1
-	model_name = args.model_type+'CNN'+str(model_index)
+	model_name = 'CNN'+str(model_index)
 	out_dir = 'out/{}/{}'.format(exp_num, model_name)
 
 if(not os.path.exists(out_dir)):
 	os.mkdir(out_dir)
 	print('folder created: ', out_dir)
+print('out_dir: ', out_dir)
 
 train_path = 'data/{}_{}/train'.format(exp_num, class_type)
-valid_path = 'out/{}_{}/valid'.format(exp_num, class_type)
-test_path = 'out/{}_{}/test'.format(exp_num, class_type)
+valid_path = 'data/{}_{}/valid'.format(exp_num, class_type)
+test_path = 'data/{}_{}/test'.format(exp_num, class_type)
 if(class_type == 'all'):
 	class_dic = {'bc':0, 'cc':1, 'lc':2, 'pc':3,
 		'bn':4, 'cn':5, 'ln':6, 'pn':7}
@@ -66,18 +67,37 @@ elif(class_type == 'all'):
 else:
 	raise Exception('ERROR: unknown class type: ', class_type)
 
+def get_x_ids(path):
+    x_filenames = glob.glob(os.path.join(path, 'x*'))
+    filenames = [f[:-4] for f in x_filenames]
+    return filenames
+
+def get_y_ids(path):
+    y_filenames = glob.glob(os.path.join(path, 'y*'))
+    filenames = [f[:-4] for f in y_filenames]
+    return filenames
+
 with tf.device('/cpu:0'):
-    valid_generator = my_data_utils.DataGenerator(valid_path)
-    train_generator = my_data_utils.DataGenerator(train_path)
-    test_generator = my_data_utils.DataGenerator(test_path)  
+    partition = {}
+    labels = {}
+    partition['valid'] = get_x_ids(valid_path)
+    partition['test'] = get_x_ids(test_path)
+    partition['train'] = get_x_ids(train_path)
 
-print('train shapes: ', train_x.shape, train_y.shape)
-print('valid shapes: ', valid_x.shape, valid_y.shape)
-print('test shapes: ', test_x.shape, test_y.shape)
+    labels['valid'] = get_y_ids(valid_path)
+    labels['test'] = get_y_ids(test_path)
+    labels['train'] = get_y_ids(train_path)
 
-print('train max: ', np.amax(train_x))
-print('train min: ', np.amin(train_x))
-print('train mean: ', np.mean(train_x))
+    print('valid x ids len: ', len(partition['valid']))
+    print('test x ids len: ', len(partition['test']))
+    print('train x ids len: ', len(partition['train']))
+    print('valid y ids len: ', len(labels['valid']))
+    print('test y ids len: ', len(labels['test']))
+    print('train y ids len: ', len(labels['train']))
+
+    valid_generator = my_data_utils.DataGenerator(partition['valid'])
+    train_generator = my_data_utils.DataGenerator(partition['train'])
+    test_generator = my_data_utils.DataGenerator(partition['test'])
 
 
 k_reg = regularizers.l2(0.001)
@@ -85,7 +105,7 @@ k_reg = regularizers.l2(0.001)
 
 def shallow_cnn(k_reg=k_reg):
         model = Sequential(name='shallow_CNN')
-        model.add(Input(shape=(200, 200, 128)))
+        model.add(Input(shape=(1600, 1600, 128)))
         #model.add(normalizer())
         model.add(Conv2D(128, (3, 3), kernel_regularizer=k_reg))
         model.add(BatchNormalization())
@@ -122,7 +142,7 @@ https://datascience.stackexchange.com/questions/41921/sparse-categorical-crossen
 if(class_type == 'binary'):
 	loss = 'binary_crossentropy'
 else:
-	loss = 'sparse_categorical_crossentropy'
+	loss = 'categorical_crossentropy'
 
 model.compile(loss=loss,
               optimizer=optimizer,
@@ -140,10 +160,9 @@ callbacks = [callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1),
 #define class_weight to support under-representative classes
 class_weight = {0:1, 1:1, 2:1, 3:1, 4:1, 5:1, 6:1, 7:1} #to be updated
 print('class weight: ', class_weight)
-history = model.fit(train_x, train_y, 
-			batch_size=batch_size, 
+history = model.fit(train_generator, 
 			epochs=train_epochs, 
-			validation_data=(valid_x, valid_y), 
+			validation_data=valid_generator, 
 			callbacks=callbacks)
 
 print('train history results: ', history.history)
