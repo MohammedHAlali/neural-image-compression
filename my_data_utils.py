@@ -3,11 +3,13 @@ All other processing code files should use these helper functions
 '''
 
 import os
+import glob
 import scipy
+from scipy import sparse
 import numpy as np
 from tensorflow import keras
 import tensorflow as tf
-
+'''
 def create_ds_generator(files):
     print('we have {} files and {} labels'.format(len(files), len(labels)))
     def get_pair(fs, ls):
@@ -22,76 +24,76 @@ def create_ds_generator(files):
 
     dataset = tf.data.Dataset.from_generator(generator=get_pair, args=(files, labels), output_types=(np.float32, np.int32), output_shapes=((1, 1600, 1600, 128), (1)))
     return dataset
+'''
 
 #source link:
 # https://www.kaggle.com/datapsycho/training-large-scale-data-with-keras-and-tf
 class DataGenerator(keras.utils.Sequence):
-    def __init__(self, list_IDs):
+    def __init__(self, list_IDs, model_type):
         'Initialization'
         self.list_IDs = list_IDs
         self.on_epoch_end()
-        print('list_ids len: ', len(list_IDs))
+        self.model_type = model_type
+        #print('list_ids len: ', len(list_IDs))
     	
     def __len__(self):
         # is responsible for agetting the total number of .npy files for each epochs
         # 'Denotes the number of batches per epoch'
         return len(self.list_IDs)
-
-
-    def __getitem__(self, index):
-        # is responsible for select 1 item at a time for training from the given list of file location
-        # 'Generate one batch of data'
-        
-        # Generate indexes of the batch
-        indexes = self.indexes[index:(index+1)]
-        print('indexes: ', indexes)
-
-        # Find list of IDs
-        list_IDs_temp = [self.list_IDs[k] for k in indexes]
-        #print('list_ids_temp: ', list_IDs_temp)
-
-        # Generate data
-        X, y = self.__data_generation(list_IDs_temp)
-
-        return X, y 
     
     def on_epoch_end(self):
         #  is a confusing method to indicate when epoch will end
         'Updates indexes after each epoch'
         self.indexes = np.arange(len(self.list_IDs))
         np.random.shuffle(self.indexes)
+        #print('indexes: ', self.indexes)
     
     def __data_generation(self, list_IDs_temp):
         # generate the selected file and associated label file by __getitem__
         'Generates data containing batch_size samples'
-        #X = np.empty((self.batch_size, *self.dim))
-        #y = np.empty((self.batch_size), dtype=int)
-        #print('created empty X shape={}, y shape={}'.format(X.shape, y.shape))
         # Generate data
         #print('list_IDs_temp: ', list_IDs_temp)
-        for i, filename in enumerate(list_IDs_temp):
-            print('[{}/{}] id: {}'.format(i, len(list_IDs_temp), filename))
-            ID = filename[filename.rfind('_')+1:]
-            #print('fild ID: ', ID)
-            x_file_path = os.path.join(filename[:filename.rfind('/')], 'x_'+ID+'.npy')
-            y_file_path = os.path.join(filename[:filename.rfind('/')], 'y_'+ID+'.npy')
-            #print('tying to load data: ', x_file_path)
-            #print('tying to load label: ', y_file_path)
+        filename = list_IDs_temp[0]
+        print('file: {}'.format(filename))
+        ID = filename[filename.rfind('_')+1:]
+        #print('fild ID: ', ID)
+        x_file_path = os.path.join(filename[:filename.rfind('/')], 'x_'+ID+'.npy')
+        y_file_path = os.path.join(filename[:filename.rfind('/')], 'y_'+ID+'.npy')
+        print('tying to load data: ', x_file_path)
+        print('tying to load label: ', y_file_path)
         
-            # Store sample
-            X = np.load(x_file_path)
-            if(X.ndim < 4):
-                X = np.expand_dims(X, axis=0)
-            #print('loaded x shape: ', X.shape)
+        # Store sample
+        X = np.load(x_file_path)
+        if(self.model_type == 'ANN'):
+            X = X.flatten()
+        if(X.ndim < 4):
+            X = np.expand_dims(X, axis=0)
+        print('loaded x shape: ', X.shape)
 
-            # Store class
-            y = np.load(y_file_path).astype('int')
-            y = keras.utils.to_categorical(y)
-            if(y.ndim < 2):
-                y = np.expand_dims(y, axis=0)
-            #print('loaded y shape: ', y.shape)
-            #print('label = ', y.item())
+        # Store class
+        y = np.load(y_file_path).astype('int')
+        y = keras.utils.to_categorical(y, num_classes=8)
+        if(y.ndim < 2):
+            y = np.expand_dims(y, axis=0)
+        print('loaded y shape: ', y.shape)
+        #print('label = ', y.item())
         return X, y
+    def __getitem__(self, index):
+        # is responsible for select 1 item at a time for training from the given list of file location
+        # 'Generate one batch of data'
+
+        # Generate indexes of the batch
+        indexes = self.indexes[index:(index+1)]
+        #print('indexes: ', indexes)
+
+        # Find list of IDs
+        list_IDs_temp = [self.list_IDs[k] for k in indexes]
+        #print('list_ids_temp: ', list_IDs_temp)
+
+        # Generate data
+        Xa, ya = self.__data_generation(list_IDs_temp)
+
+        return Xa, ya
 
 def load_data_per_file(phase, class_type, exp_num):
     class_dic = {'breast':0, 'colon':1, 'lung':2, 'panc':3,
@@ -259,9 +261,11 @@ def save_data_label(phase, class_type, exp_num):
     class_dic = {'breast':0, 'colon':1, 'lung':2, 'panc':3,
 		'normal_breast':4, 'normal_colon':5, 'normal_lung':6, 'normal_panc':7}
     class_names = class_dic.keys()
-    upper_out = 'out/{}'.format(exp_num)
     data_path = 'data/{}/{}'.format(exp_num, phase)
     print('loading data from path: ', data_path)
+    out_path = 'data/{}_{}/'.format(exp_num, class_type)
+    if(not os.path.exists(out_path)):
+        os.mkdir(out_path)
     out_path = 'data/{}_{}/{}'.format(exp_num, class_type, phase)
     if(not os.path.exists(out_path)):
         os.mkdir(out_path)
@@ -303,3 +307,84 @@ def save_data_label(phase, class_type, exp_num):
             print(label_out_path, ' SAVED')
             unique_idx += 1
 
+
+def convert_to_sparse(phase, class_type, exp_num):
+    print('trying to convert dataset to sparse')
+    in_path = 'data/{}_{}/{}'.format(exp_num, class_type, phase)
+    out_path = 'data/{}_{}_sparse'.format(exp_num, class_type)
+    if(not os.path.exists(out_path)):
+        os.mkdir(out_path)
+    out_path = os.path.join(out_path, phase)
+    if(not os.path.exists(out_path)):
+        os.mkdir(out_path)
+    print('reading data from: ', in_path)
+    filenames = glob.glob(os.path.join(in_path, 'x*.npy'))
+    data_len = len(filenames)
+    print('Number of files read is ', data_len)
+    for i, filename in enumerate(filenames):
+        print('[{}/{}] {}'.format(i, len(filenames), filename))
+        _index = filename.rfind('_')
+        dot_index = filename.find('.')
+        ID = filename[_index+1:dot_index]
+        print('found id: ', ID)
+        save_path = os.path.join(out_path, 'sparse_x_{}'.format(ID))
+        if(os.path.exists(save_path+'.npz')):
+            print('file EXISTS: ', save_path)
+            continue
+        ar = np.load(filename)
+        print('loaded array shape: ', ar.shape)
+        if(sparse.issparse(ar)): #check if sparse
+            print('array is sparse')
+            continue
+        if(ar.ndim > 2):
+            ar = ar.flatten()
+        print('array flatten shape: ', ar.shape)
+        #convert to sparse
+        sp = sparse.csr_matrix(ar, dtype='float64')
+        #save sparse in out_path 
+        save_path = os.path.join(out_path, 'sparse_x_{}'.format(ID))
+        print('trying to save file: ', save_path)
+        sparse.save_npz(save_path, sp)
+        print('saved')
+        x_index = filename.find('x')
+        y_filename = filename[:x_index]+'y'+filename[x_index+1:]
+        print('trying to open y file: ', y_filename)
+        y = np.load(y_filename)
+        print('loaded y shape: ', y.shape)
+        print('label = ', y.item())
+        y_save_path = os.path.join(out_path, 'sparse_y_{}'.format(ID))
+        print('trying to save y file: ', y_save_path)
+        np.save(y_save_path, y)
+    print('------ done -----')
+
+def get_sparse_data(phase, class_type, exp_num):
+    in_data = 'data/{}_{}_sparse/{}'.format(exp_num, class_type, phase)
+    out_path = 'data/{}_{}_sparse/'.format(exp_num, class_type)
+    in_path = os.path.join(in_data, '*x*.npz')
+    print('trying to find files in path: ', in_path)
+    x_filenames = glob.glob(in_path)
+    print('Number of data files found: ', len(x_filenames))
+    data = []
+    labels = []
+    for i, f in enumerate(x_filenames):
+        print('[{}/{}] {}'.format(i, len(x_filenames), f))
+        ar = sparse.load_npz(f)
+        print('loaded sparse ar of shape: ', ar.shape)
+        index = f.index('x')
+        y_filename = f[:index]+'y'+f[index+1:-1]+'y'
+        print('trying to load y filename: ', y_filename)
+        y_ar = np.load(y_filename)
+        print('loaded y shape: ', y_ar)
+        data.append(ar)
+        labels.append(y_ar)
+    print('data len: ', len(data))
+    print('labels len: ', len(labels))
+    sparse_data = sparse.vstack(data)
+    sparse_labels = np.array(labels)
+    print('Number of occurences for classes in label set: ', np.bincount(sparse_labels))
+    print('unique labels in label set: ', np.unique(sparse_labels))
+    print('sparse data shape: ', sparse_data.shape)
+    print('sparse labels shape: ', sparse_labels.shape)
+    sparse.save_npz(os.path.join(out_path, '{}_x_sparse'.format(phase)), sparse_data)
+    np.save(os.path.join(out_path, '{}_y_sparse'.format(phase)), sparse_labels)
+    return sparse_data, sparse_labels

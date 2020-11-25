@@ -19,6 +19,7 @@ from tensorflow.keras.layers import Conv2D, Activation, MaxPooling2D, Dropout, F
 import my_data_utils
 
 parser = argparse.ArgumentParser()
+parser.add_argument('model_type', help='cnn or ann')
 parser.add_argument('exp_num', help='aeX, huberX, where X > 10')
 parser.add_argument('class_type', help='binary, all')
 args = parser.parse_args()
@@ -27,13 +28,15 @@ print('class type: ', args.class_type)
 
 exp_num = args.exp_num
 class_type = args.class_type
+model_type = args.model_type.upper()
 model_index = 0
-model_name = 'CNN'+str(model_index)
+model_name = model_type+str(model_index)
 train_epochs = 100
-batch_size = 2
+batch_size = 1
 
-title = '{} classification of all 8 classes'.format(model_name[:-1])
+title = '{} classification of all 8 classes'.format(model_type)
 print(title)
+
 upper_out = 'out/{}'.format(exp_num)
 
 out_dir = '{}/{}'.format(upper_out, model_name)
@@ -41,7 +44,7 @@ out_dir = '{}/{}'.format(upper_out, model_name)
 np.set_printoptions(precision=3)
 while(os.path.exists(out_dir) and (len(os.listdir(out_dir)) > 0)):
 	model_index += 1
-	model_name = 'CNN'+str(model_index)
+	model_name = model_type+str(model_index)
 	out_dir = 'out/{}/{}'.format(exp_num, model_name)
 
 if(not os.path.exists(out_dir)):
@@ -73,8 +76,17 @@ def get_x_ids(path):
     return filenames
 
 def get_y_ids(path):
+    print('processing labels from :', path)
     y_filenames = glob.glob(os.path.join(path, 'y*'))
     filenames = [f[:-4] for f in y_filenames]
+    labels = []
+    for f in filenames:
+        ar = np.load(f).astype('int')
+        labels.append(ar)
+    print('number of labels = ', len(labels))
+    labels = np.array(labels)
+    print('unique labels in set: ', np.unique(labels))
+    print('Number of occurences for classes in set: ', np.bincount(labels))
     return filenames
 
 with tf.device('/cpu:0'):
@@ -87,35 +99,53 @@ with tf.device('/cpu:0'):
     labels['valid'] = get_y_ids(valid_path)
     labels['test'] = get_y_ids(test_path)
     labels['train'] = get_y_ids(train_path)
+    
+    train_len = len(partition['train'])
+    valid_len = len(partition['valid'])
+    test_len = len(partition['test'])
+    print('valid x ids len: ', valid_len)
+    print('test x ids len: ', test_len)
+    print('train x ids len: ', train_len)
+    #print('valid y ids len: ', len(labels['valid']))
+    #print('test y ids len: ', len(labels['test']))
+    #print('train y ids len: ', len(labels['train']))
 
-    print('valid x ids len: ', len(partition['valid']))
-    print('test x ids len: ', len(partition['test']))
-    print('train x ids len: ', len(partition['train']))
-    print('valid y ids len: ', len(labels['valid']))
-    print('test y ids len: ', len(labels['test']))
-    print('train y ids len: ', len(labels['train']))
-
-    valid_generator = my_data_utils.DataGenerator(partition['valid'])
-    train_generator = my_data_utils.DataGenerator(partition['train'])
-    test_generator = my_data_utils.DataGenerator(partition['test'])
+    valid_generator = my_data_utils.DataGenerator(partition['valid'], model_type)
+    train_generator = my_data_utils.DataGenerator(partition['train'], model_type)
+    test_generator = my_data_utils.DataGenerator(partition['test'], model_type)
 
 
 k_reg = regularizers.l2(0.001)
 
+def ann():
+	model = Sequential(name='shallow_ANN')
+	model.add(Input(shape=(1600*1600*128)))
+	model.add(Dense(100, activation='relu'))
+	model.add(Dropout(0.25))
+	model.add(Dense(100, activation='relu'))
+	model.add(Dropout(0.25))
+	model.add(Dense(100, activation='relu'))
+	model.add(Dropout(0.25))
+	if(num_classes == 8):
+		activ = 'softmax'
+	else:
+		activ = 'sigmoid'
+	model.add(Dense(num_classes, activation=activ))
+	return model
 
-def shallow_cnn(k_reg=k_reg):
+def cnn():
         model = Sequential(name='shallow_CNN')
         model.add(Input(shape=(1600, 1600, 128)))
         #model.add(normalizer())
         model.add(Conv2D(128, (3, 3), kernel_regularizer=k_reg))
         model.add(BatchNormalization())
         model.add(Activation('relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(MaxPooling2D(pool_size=(8, 8)))
 
         model.add(Conv2D(64, (3, 3), kernel_regularizer=k_reg))
         model.add(BatchNormalization())
         model.add(Activation('relu'))
-        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(MaxPooling2D(pool_size=(8, 8)))
 
         model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
         model.add(Dense(128, kernel_regularizer=k_reg))
@@ -129,7 +159,12 @@ def shallow_cnn(k_reg=k_reg):
                 model.add(Activation('sigmoid'))
         return model
 
-model = shallow_cnn(k_reg=k_reg)
+if(model_type == 'CNN'):
+	model = cnn()
+elif(model_type == 'ANN'):
+	model = ann()
+else:
+	raise Exception('ERROR: unknow model type: ', model_type)
 
 model.summary()
 
@@ -162,7 +197,9 @@ class_weight = {0:1, 1:1, 2:1, 3:1, 4:1, 5:1, 6:1, 7:1} #to be updated
 print('class weight: ', class_weight)
 history = model.fit(train_generator, 
 			epochs=train_epochs, 
-			validation_data=valid_generator, 
+			steps_per_epoch=train_len,
+			validation_data=valid_generator,
+			validation_steps=valid_len,
 			callbacks=callbacks)
 
 print('train history results: ', history.history)
