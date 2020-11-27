@@ -55,17 +55,22 @@ class_names = class_dic.keys()
 
 title = '{} classification of {} classes'.format(model_type, len(class_names))
 print(title)
-
-#my_data_utils.save_data_label('valid', class_type, exp_num)
+#step 1
+#my_data_utils.save_data_label('test', class_type, exp_num)
+#my_data_utils.save_data_label('train', class_type, exp_num)
 #exit()
+
+#step 2
 #my_data_utils.convert_to_sparse('train', class_type, exp_num)
 #my_data_utils.convert_to_sparse('test', class_type, exp_num)
 #my_data_utils.convert_to_sparse('valid', class_type, exp_num)
-data, labels = my_data_utils.get_sparse_data('train', class_type, exp_num)
-#data, labels = my_data_utils.get_sparse_data('valid', class_type, exp_num)
-#data, labels = my_data_utils.get_sparse_data('test', class_type, exp_num)
-print('loaded sparse data shapes: ', data.shape, labels.shape)
-exit()
+
+#step 3
+#data, labels = my_data_utils.merge_sparse_data(args.model_type, class_type, exp_num)
+#data, labels = my_data_utils.merge_sparse_data('valid', class_type, exp_num)
+#data, labels = my_data_utils.merge_sparse_data('test', class_type, exp_num)
+#print('loaded sparse data shapes: ', data.shape, labels.shape)
+#exit()
 upper_out = 'out/{}'.format(exp_num)
 
 out_dir = '{}/{}'.format(upper_out, model_name)
@@ -78,19 +83,16 @@ if(not os.path.exists(out_dir)):
 	os.mkdir(out_dir)
 	print('folder created: ', out_dir)
 
-train_path = 'out/{}/features/train'.format(exp_num)
-valid_path = 'out/{}/features/valid'.format(exp_num)
-test_path = 'out/{}/features/test'.format(exp_num)
-
 #sparse data
-train_sparse_x_path = os.path.join(upper_out, 'train_x_sparse_{}.npz'.format(class_type))
-train_sparse_y_path = os.path.join(upper_out, 'train_y_sparse_{}.npy'.format(class_type))
-test_sparse_x_path = os.path.join(upper_out, 'test_x_sparse_{}.npz'.format(class_type))
-test_sparse_y_path = os.path.join(upper_out, 'test_y_sparse_{}.npy'.format(class_type))
+train_sparse_x_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'train_x_sparse.npz')
+train_sparse_y_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'train_y_sparse.npy')
+test_sparse_x_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'test_x_sparse.npz')
+test_sparse_y_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'test_y_sparse.npy')
+print('train path: ', train_sparse_x_path)
 
 #TO-DO: check if npy data file exists, load directly, else load from the above method.
 if(os.path.exists(train_sparse_x_path)):
-	print('sparse npy data exists')
+	print('sparse npz data exists')
 	print('loading train path: ', train_sparse_x_path)
 	train_sparse_x = scipy.sparse.load_npz(train_sparse_x_path)
 	if(not scipy.sparse.issparse(train_sparse_x)):
@@ -102,6 +104,7 @@ if(os.path.exists(train_sparse_x_path)):
 	print('loaded test sparse data of shape x={},y={} type={}'.format(test_sparse_x.shape,test_y.shape, type(test_sparse_x)))
 else:
 	print('sparse files NOT available')
+	exit()
 	valid_x, valid_y = my_data_utils.load_data('valid', class_type, exp_num)
 	print('valid data shapes: ', valid_x.shape, valid_y.shape)
 	if(valid_x.ndim > 1):

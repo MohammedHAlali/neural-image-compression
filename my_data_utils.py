@@ -9,22 +9,6 @@ from scipy import sparse
 import numpy as np
 from tensorflow import keras
 import tensorflow as tf
-'''
-def create_ds_generator(files):
-    print('we have {} files and {} labels'.format(len(files), len(labels)))
-    def get_pair(fs, ls):
-        i = 0
-        if(i >= len(files)):
-            return None
-        x = np.load(fs[i])
-        x = np.expand_dims(x, axis=0)
-        y = np.load(ls[i])
-        yield x, y
-        i += 1
-
-    dataset = tf.data.Dataset.from_generator(generator=get_pair, args=(files, labels), output_types=(np.float32, np.int32), output_shapes=((1, 1600, 1600, 128), (1)))
-    return dataset
-'''
 
 #source link:
 # https://www.kaggle.com/datapsycho/training-large-scale-data-with-keras-and-tf
@@ -57,8 +41,8 @@ class DataGenerator(keras.utils.Sequence):
         print('file: {}'.format(filename))
         ID = filename[filename.rfind('_')+1:]
         #print('fild ID: ', ID)
-        x_file_path = os.path.join(filename[:filename.rfind('/')], 'x_'+ID+'.npy')
-        y_file_path = os.path.join(filename[:filename.rfind('/')], 'y_'+ID+'.npy')
+        x_file_path = os.path.join(filename[:filename.rfind('/')], 'x_'+ID)
+        y_file_path = os.path.join(filename[:filename.rfind('/')], 'y_'+ID)
         print('tying to load data: ', x_file_path)
         print('tying to load label: ', y_file_path)
         
@@ -72,7 +56,10 @@ class DataGenerator(keras.utils.Sequence):
 
         # Store class
         y = np.load(y_file_path).astype('int')
-        y = keras.utils.to_categorical(y, num_classes=8)
+        num_classes = 8
+        if('binary' in x_file_path):
+            num_classes = 2
+        y = keras.utils.to_categorical(y, num_classes=num_classes)
         if(y.ndim < 2):
             y = np.expand_dims(y, axis=0)
         print('loaded y shape: ', y.shape)
@@ -257,6 +244,7 @@ def load_data(phase='train', class_type='all', exp_num='huber11'):
 		print('npy files saved: ', data_x_path, data_y_path)
 	return data_list, label_list
 
+# step 1
 def save_data_label(phase, class_type, exp_num):
     class_dic = {'breast':0, 'colon':1, 'lung':2, 'panc':3,
 		'normal_breast':4, 'normal_colon':5, 'normal_lung':6, 'normal_panc':7}
@@ -273,6 +261,7 @@ def save_data_label(phase, class_type, exp_num):
     class_names = os.listdir(data_path)
     print('Number of files: ', len(class_names))
     unique_idx = 0
+    labels = []
     for c in class_names:
         class_path = os.path.join(data_path, c)
         if(not os.path.isdir(class_path)):
@@ -286,6 +275,8 @@ def save_data_label(phase, class_type, exp_num):
         elif(class_type=='binary' and label <= 7):
             label = 1 #normal
         print('label = ', label)
+        labels.append(label)
+        print('labels: ', labels)
         for i, f in enumerate(files):
             if(not '.npy' in f):
                 continue
@@ -303,11 +294,21 @@ def save_data_label(phase, class_type, exp_num):
             print('trying to save : ', data_out_path)
             np.save(data_out_path, np.array(arr))
             print(data_out_path, ' SAVED')
-            np.save(label_out_path, np.array(label))
+            label = np.array(label)
+            print('label = ', label.item())
+            np.save(label_out_path, label)
             print(label_out_path, ' SAVED')
             unique_idx += 1
+        all_labels = np.array(labels)
+        print('labels: ', all_labels)
+    u = np.unique(all_labels)
+    print('unique labels in labels set: ', u)
+    if(class_type == 'all' and u.shape[0] < 8):
+        raise Exception('ERROR: did not get enough labels')
+    print('---- done ----')
 
 
+# step 2
 def convert_to_sparse(phase, class_type, exp_num):
     print('trying to convert dataset to sparse')
     in_path = 'data/{}_{}/{}'.format(exp_num, class_type, phase)
@@ -321,13 +322,20 @@ def convert_to_sparse(phase, class_type, exp_num):
     filenames = glob.glob(os.path.join(in_path, 'x*.npy'))
     data_len = len(filenames)
     print('Number of files read is ', data_len)
+    labels = [] #keep track of labels
     for i, filename in enumerate(filenames):
         print('[{}/{}] {}'.format(i, len(filenames), filename))
         _index = filename.rfind('_')
         dot_index = filename.find('.')
         ID = filename[_index+1:dot_index]
-        print('found id: ', ID)
+        #print('found id: ', ID)
         save_path = os.path.join(out_path, 'sparse_x_{}'.format(ID))
+        x_index = filename.find('x')
+        y_filename = filename[:x_index]+'y'+filename[x_index+1:]
+        print('trying to open y file: ', y_filename)
+        y = np.load(y_filename).astype('int')
+        labels.append(y.item())
+        print('labels = : ', labels)
         if(os.path.exists(save_path+'.npz')):
             print('file EXISTS: ', save_path)
             continue
@@ -342,22 +350,23 @@ def convert_to_sparse(phase, class_type, exp_num):
         #convert to sparse
         sp = sparse.csr_matrix(ar, dtype='float64')
         #save sparse in out_path 
-        save_path = os.path.join(out_path, 'sparse_x_{}'.format(ID))
+        #save_path = os.path.join(out_path, 'sparse_x_{}'.format(ID))
         print('trying to save file: ', save_path)
         sparse.save_npz(save_path, sp)
         print('saved')
-        x_index = filename.find('x')
-        y_filename = filename[:x_index]+'y'+filename[x_index+1:]
-        print('trying to open y file: ', y_filename)
-        y = np.load(y_filename)
-        print('loaded y shape: ', y.shape)
-        print('label = ', y.item())
+        #print('label = ', y.item())
         y_save_path = os.path.join(out_path, 'sparse_y_{}'.format(ID))
         print('trying to save y file: ', y_save_path)
         np.save(y_save_path, y)
+    all_labels = np.array(labels)
+    u = np.unique(all_labels)
+    print('unique labels in labels set: ', u)
+    if(class_type == 'all' and u.shape[0] < 8):
+        raise Exception('ERROR: did not get enough labels')
     print('------ done -----')
 
-def get_sparse_data(phase, class_type, exp_num):
+# step 3
+def merge_sparse_data(phase, class_type, exp_num):
     in_data = 'data/{}_{}_sparse/{}'.format(exp_num, class_type, phase)
     out_path = 'data/{}_{}_sparse/'.format(exp_num, class_type)
     in_path = os.path.join(in_data, '*x*.npz')
@@ -373,18 +382,29 @@ def get_sparse_data(phase, class_type, exp_num):
         index = f.index('x')
         y_filename = f[:index]+'y'+f[index+1:-1]+'y'
         print('trying to load y filename: ', y_filename)
-        y_ar = np.load(y_filename)
+        y_ar = np.load(y_filename).astype('int')
         print('loaded y shape: ', y_ar)
         data.append(ar)
-        labels.append(y_ar)
+        labels.append(y_ar.item())
+        print('labels: ', labels)
     print('data len: ', len(data))
     print('labels len: ', len(labels))
     sparse_data = sparse.vstack(data)
     sparse_labels = np.array(labels)
     print('Number of occurences for classes in label set: ', np.bincount(sparse_labels))
-    print('unique labels in label set: ', np.unique(sparse_labels))
+    u = np.unique(sparse_labels)
+    print('unique labels in label set: ', u)
+    if(class_type == 'all' and u.shape[0] < 8):
+       raise Exception('ERROR: did not get enough labels')
     print('sparse data shape: ', sparse_data.shape)
     print('sparse labels shape: ', sparse_labels.shape)
-    sparse.save_npz(os.path.join(out_path, '{}_x_sparse'.format(phase)), sparse_data)
-    np.save(os.path.join(out_path, '{}_y_sparse'.format(phase)), sparse_labels)
+    data_out_path = os.path.join(out_path, '{}_x_sparse'.format(phase))
+    labels_out_path = os.path.join(out_path, '{}_y_sparse'.format(phase))
+    sparse.save_npz(data_out_path, sparse_data)
+    np.save(labels_out_path, sparse_labels)
+    print('saved data in : ', data_out_path)
+    print('saved labels in : ', labels_out_path)
     return sparse_data, sparse_labels
+
+if(__name__ == "__main__"):
+convert_to_sparse( 

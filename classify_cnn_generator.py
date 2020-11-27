@@ -72,22 +72,22 @@ else:
 
 def get_x_ids(path):
     x_filenames = glob.glob(os.path.join(path, 'x*'))
-    filenames = [f[:-4] for f in x_filenames]
-    return filenames
+    #filenames = [f[:-4] for f in x_filenames]
+    return x_filenames
 
 def get_y_ids(path):
     print('processing labels from :', path)
     y_filenames = glob.glob(os.path.join(path, 'y*'))
-    filenames = [f[:-4] for f in y_filenames]
+    #filenames = [f[:-4] for f in y_filenames]
     labels = []
-    for f in filenames:
+    for f in y_filenames:
         ar = np.load(f).astype('int')
         labels.append(ar)
     print('number of labels = ', len(labels))
     labels = np.array(labels)
     print('unique labels in set: ', np.unique(labels))
     print('Number of occurences for classes in set: ', np.bincount(labels))
-    return filenames
+    return y_filenames
 
 with tf.device('/cpu:0'):
     partition = {}
