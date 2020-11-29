@@ -190,7 +190,10 @@ print('lr will be reduced when no improvement after {} epochs'.format(patience))
 print('EarlyStopping will be when no improvement after {} epochs'.format(patience*2))
 callbacks = [callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1),
 		callbacks.ReduceLROnPlateau(verbose=1, factor=0.2, patience=patience),
-		callbacks.EarlyStopping(verbose=1, patience=patience*2)
+		callbacks.EarlyStopping(verbose=1, patience=patience*2),
+		callbacks.ModelCheckpoint(filepath='{}/exp_{}_best_model'.format(out_dir, exp_num),
+					save_best_only=True,
+					verbose=1)
 		]
 #define class_weight to support under-representative classes
 class_weight = {0:1, 1:1, 2:1, 3:1, 4:1, 5:1, 6:1, 7:1} #to be updated

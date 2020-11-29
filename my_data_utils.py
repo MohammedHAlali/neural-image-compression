@@ -407,4 +407,4 @@ def merge_sparse_data(phase, class_type, exp_num):
     return sparse_data, sparse_labels
 
 if(__name__ == "__main__"):
-convert_to_sparse( 
+    merge_sparse_data(phase='train', class_type='all', exp_num='bigan')
