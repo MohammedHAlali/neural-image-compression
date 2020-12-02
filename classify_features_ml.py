@@ -11,6 +11,7 @@ import datetime
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
+import sklearn
 from sklearn import metrics, utils, svm, linear_model
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
@@ -25,7 +26,7 @@ import my_data_utils
 print('Numpy version: ', np.__version__)
 print('Scipy version: ', scipy.__version__)
 print('TF version: ', tf.__version__)
-
+print('sklearn version: ', sklearn.__version__)
 parser = argparse.ArgumentParser()
 parser.add_argument('model_type', help='svm, rf, or voting')
 parser.add_argument('exp_num', help='aeX, huberX, where X > 10')
@@ -86,6 +87,8 @@ if(not os.path.exists(out_dir)):
 #sparse data
 train_sparse_x_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'train_x_sparse.npz')
 train_sparse_y_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'train_y_sparse.npy')
+valid_sparse_x_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'valid_x_sparse.npz')
+valid_sparse_y_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'valid_y_sparse.npy')
 test_sparse_x_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'test_x_sparse.npz')
 test_sparse_y_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'test_y_sparse.npy')
 print('train path: ', train_sparse_x_path)
@@ -97,14 +100,20 @@ if(os.path.exists(train_sparse_x_path)):
 	train_sparse_x = scipy.sparse.load_npz(train_sparse_x_path)
 	if(not scipy.sparse.issparse(train_sparse_x)):
 		raise Exception('ERROR: train data sparse is NOT sparse')
-	train_y = np.load(train_sparse_y_path)
+	train_y = np.load(train_sparse_y_path).astype('int32')
 	print('loaded train sparse data of shape x={},y={} type={}'.format(train_sparse_x.shape,train_y.shape, type(train_sparse_x)))
+	if(os.path.exists(valid_sparse_x_path)):
+		print('valid sparse npz available')
+		valid_sparse_x = scipy.sparse.load_npz(valid_sparse_x_path)
+		valid_y = np.load(valid_sparse_y_path).astype('int32')
+		train_sparse_x = scipy.sparse.vstack([train_sparse_x, valid_sparse_x])
+		train_y = np.concatenate([train_y, valid_y])
+		print('loaded train sparse data of shape x={},y={} type={}, dtype={}, indices dtype={}'.format(train_sparse_x.shape,train_y.shape, type(train_sparse_x), train_sparse_x.dtype, train_sparse_x.indices.dtype))
 	test_sparse_x = scipy.sparse.load_npz(test_sparse_x_path)
-	test_y = np.load(test_sparse_y_path)
+	test_y = np.load(test_sparse_y_path).astype('int32')
 	print('loaded test sparse data of shape x={},y={} type={}'.format(test_sparse_x.shape,test_y.shape, type(test_sparse_x)))
 else:
 	print('sparse files NOT available')
-	exit()
 	valid_x, valid_y = my_data_utils.load_data('valid', class_type, exp_num)
 	print('valid data shapes: ', valid_x.shape, valid_y.shape)
 	if(valid_x.ndim > 1):

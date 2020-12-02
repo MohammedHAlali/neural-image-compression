@@ -14,7 +14,7 @@ import seaborn as sns
 import tensorflow as tf
 from tensorflow.keras import utils, regularizers, Input
 from tensorflow.keras import callbacks
-from tensorflow.keras import Sequential, Model
+from tensorflow.keras import Sequential, Model, models
 from tensorflow.keras.layers import Conv2D, Activation, MaxPooling2D, Dropout, Flatten, Dense, BatchNormalization, GlobalAveragePooling2D, experimental
 import my_data_utils
 
@@ -22,16 +22,18 @@ parser = argparse.ArgumentParser()
 parser.add_argument('model_type', help='cnn or ann')
 parser.add_argument('exp_num', help='aeX, huberX, where X > 10')
 parser.add_argument('class_type', help='binary, all')
+parser.add_argument('existing_model', nargs='?', help='name of existing model to load')
 args = parser.parse_args()
 
 print('class type: ', args.class_type)
+print('existing model name: ', args.existing_model)
 
 exp_num = args.exp_num
 class_type = args.class_type
 model_type = args.model_type.upper()
 model_index = 0
 model_name = model_type+str(model_index)
-train_epochs = 100
+train_epochs = 10
 batch_size = 1
 
 title = '{} classification of all 8 classes'.format(model_type)
@@ -46,6 +48,9 @@ while(os.path.exists(out_dir) and (len(os.listdir(out_dir)) > 0)):
 	model_index += 1
 	model_name = model_type+str(model_index)
 	out_dir = 'out/{}/{}'.format(exp_num, model_name)
+if(args.existing_model is not None):
+	print('getting model from: ', args.existing_model)
+	out_dir = 'out/{}/{}'.format(exp_num, args.existing_model)
 
 if(not os.path.exists(out_dir)):
 	os.mkdir(out_dir)
@@ -109,10 +114,14 @@ with tf.device('/cpu:0'):
     #print('valid y ids len: ', len(labels['valid']))
     #print('test y ids len: ', len(labels['test']))
     #print('train y ids len: ', len(labels['train']))
-
-    valid_generator = my_data_utils.DataGenerator(partition['valid'], model_type)
-    train_generator = my_data_utils.DataGenerator(partition['train'], model_type)
-    test_generator = my_data_utils.DataGenerator(partition['test'], model_type)
+    if(args.existing_model is not None):
+        valid_generator = None
+        train_generator = None
+        test_generator = my_data_utils.DataGenerator(partition['test'], model_type)
+    else:
+        valid_generator = my_data_utils.DataGenerator(partition['valid'], model_type)
+        train_generator = my_data_utils.DataGenerator(partition['train'], model_type)
+        test_generator = my_data_utils.DataGenerator(partition['test'], model_type)
 
 
 k_reg = regularizers.l2(0.001)
@@ -140,12 +149,12 @@ def cnn():
         model.add(Conv2D(128, (3, 3), kernel_regularizer=k_reg))
         model.add(BatchNormalization())
         model.add(Activation('relu'))
-        model.add(MaxPooling2D(pool_size=(8, 8)))
+        model.add(MaxPooling2D(pool_size=(4, 4)))
 
         model.add(Conv2D(64, (3, 3), kernel_regularizer=k_reg))
         model.add(BatchNormalization())
         model.add(Activation('relu'))
-        model.add(MaxPooling2D(pool_size=(8, 8)))
+        model.add(MaxPooling2D(pool_size=(4, 4)))
 
         model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
         model.add(Dense(128, kernel_regularizer=k_reg))
@@ -160,7 +169,11 @@ def cnn():
         return model
 
 if(model_type == 'CNN'):
-	model = cnn()
+	#model = cnn()
+	model_path = 'out/{}/{}/exp_{}_best_model.h5'.format(exp_num, args.existing_model, exp_num)
+	print('loading model from: ', model_path)
+	model = models.load_model(model_path)
+	
 elif(model_type == 'ANN'):
 	model = ann()
 else:
@@ -191,7 +204,7 @@ print('EarlyStopping will be when no improvement after {} epochs'.format(patienc
 callbacks = [callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1),
 		callbacks.ReduceLROnPlateau(verbose=1, factor=0.2, patience=patience),
 		callbacks.EarlyStopping(verbose=1, patience=patience*2),
-		callbacks.ModelCheckpoint(filepath='{}/exp_{}_best_model'.format(out_dir, exp_num),
+		callbacks.ModelCheckpoint(filepath='{}/exp_{}_best_model.h5'.format(out_dir, exp_num),
 					save_best_only=True,
 					verbose=1)
 		]

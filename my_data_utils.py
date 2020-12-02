@@ -38,13 +38,13 @@ class DataGenerator(keras.utils.Sequence):
         # Generate data
         #print('list_IDs_temp: ', list_IDs_temp)
         filename = list_IDs_temp[0]
-        print('file: {}'.format(filename))
+        #print('file: {}'.format(filename))
         ID = filename[filename.rfind('_')+1:]
         #print('fild ID: ', ID)
         x_file_path = os.path.join(filename[:filename.rfind('/')], 'x_'+ID)
         y_file_path = os.path.join(filename[:filename.rfind('/')], 'y_'+ID)
-        print('tying to load data: ', x_file_path)
-        print('tying to load label: ', y_file_path)
+        #print('trying to load data: ', x_file_path)
+        #print('trying to load label: ', y_file_path)
         
         # Store sample
         X = np.load(x_file_path)
@@ -52,7 +52,7 @@ class DataGenerator(keras.utils.Sequence):
             X = X.flatten()
         if(X.ndim < 4):
             X = np.expand_dims(X, axis=0)
-        print('loaded x shape: ', X.shape)
+        #print('loaded x shape: ', X.shape)
 
         # Store class
         y = np.load(y_file_path).astype('int')
@@ -62,7 +62,7 @@ class DataGenerator(keras.utils.Sequence):
         y = keras.utils.to_categorical(y, num_classes=num_classes)
         if(y.ndim < 2):
             y = np.expand_dims(y, axis=0)
-        print('loaded y shape: ', y.shape)
+        #print('loaded y shape: ', y.shape)
         #print('label = ', y.item())
         return X, y
     def __getitem__(self, index):
@@ -407,4 +407,4 @@ def merge_sparse_data(phase, class_type, exp_num):
     return sparse_data, sparse_labels
 
 if(__name__ == "__main__"):
-    merge_sparse_data(phase='train', class_type='all', exp_num='bigan')
+    merge_sparse_data(phase='train', class_type='all', exp_num='vae')
