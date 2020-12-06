@@ -82,6 +82,27 @@ class DataGenerator(keras.utils.Sequence):
 
         return Xa, ya
 
+def nn_batch_generator(X_data, y_data, batch_size):
+    ''' source:
+    https://stackoverflow.com/questions/41538692/using-sparse-matrices-with-keras-and-tensorflow
+    X_data is scipy.sparse
+    '''
+    if(not sparse.issparse(X_data)):
+        raise Exception('ERROR: X_data is not sparse, but type=', type(X_data))
+    samples_per_epoch = X_data.shape[0]
+    number_of_batches = samples_per_epoch/batch_size
+    counter=0
+    index = np.arange(np.shape(y_data)[0])
+    while 1:
+        index_batch = index[batch_size*counter:batch_size*(counter+1)]
+        X_batch = X_data[index_batch,:].todense()
+        y_batch = y_data[index_batch]
+        counter += 1
+        yield np.array(X_batch),y_batch
+        if (counter > number_of_batches):
+            counter=0
+
+
 def load_data_per_file(phase, class_type, exp_num):
     class_dic = {'breast':0, 'colon':1, 'lung':2, 'panc':3,
                 'normal_breast':4, 'normal_colon':5, 'normal_lung':6, 'normal_panc':7}
@@ -361,14 +382,86 @@ def convert_to_sparse(phase, class_type, exp_num):
     all_labels = np.array(labels)
     u = np.unique(all_labels)
     print('unique labels in labels set: ', u)
+    print('bincount in labels set: ', np.bincount(all_labels))
     if(class_type == 'all' and u.shape[0] < 8):
         raise Exception('ERROR: did not get enough labels')
     print('------ done -----')
+
+# step 2.5
+def get_sparse_batch(phase, class_type, exp_num):
+  ''' collect a balanced mini-batch of size 16 that contains each class twice
+      then add these mini-batches in one list
+   '''
+  x_batch_list = []
+  y_batch_list = []
+  in_data = 'data/{}_{}_sparse/{}'.format(exp_num, class_type, phase)
+  y_path = os.path.join(in_data, '*y*.npy')
+  x_path = os.path.join(in_data, '*x*.npz')
+  y_filenames = glob.glob(y_path)
+  x_filenames = glob.glob(x_path)
+  if(len(y_filenames) != len(x_filenames)):
+    raise Exception('ERROR: x and y lists are not equal. x len={}, y len={}'.format(len(x_filenames), len(y_filenames)))
+  while(len(y_filenames) > 0):
+    print('len y_filenames = ', len(y_filenames))
+    x_mini_batch = []
+    y_mini_batch = []
+    for label in range(8): #each iteration gets one different label 
+      #print('wanted label: ', label)
+      for i in range(len(y_filenames)):
+        #print('[{}/{}]: ================'.format(i, len(y_filenames)))
+        y_name = y_filenames[i]
+        _index = y_name.rfind('_')+1
+        dot_index = y_name.find('.')
+        y_index = y_name.find('_y')
+        ID = y_name[_index:dot_index]
+        #print('ID: ', ID)
+        x_name = y_name[:y_index]+'_x_'+ID+'.npz'
+        #print('x name: ', x_name)
+        x_index = x_filenames.index(x_name)
+        #print('found x at index: ', x_index)
+        y = np.load(y_name)
+        if(label == y.item()):
+          #print('y name: ', y_name)
+          #print('x name: ', x_name)
+          #print('y item: ', y.item())
+          x = sparse.load_npz(x_name)
+          #print('loaded x shape: ', x.shape)
+          x_mini_batch.append(x)
+          y_mini_batch.append(y.item())
+          #print('x mini batch len: ', len(x_mini_batch))
+          #print('y mini batch : ', y_mini_batch)
+          #  remove x and y from original lists
+          x_filenames.remove(x_name)
+          y_filenames.remove(y_name)
+          break
+        #else:
+        #  print('not wanted label: ', y.item())
+      #print('finished x mini batch len=: ', len(x_mini_batch))
+      x_mini_batch_sparse = sparse.vstack(x_mini_batch)
+      y_mini_batch_sparse = np.array(y_mini_batch)
+      #print('x mini batch sparse of type: ', type(x_mini_batch_sparse), ' shape: ', x_mini_batch_sparse.shape)
+    # add mini batch list to big list
+    x_batch_list.append(x_mini_batch_sparse)
+    y_batch_list.append(y_mini_batch_sparse)
+    print('y batch list: ', y_batch_list)
+    #print('y batch list len: ', y_batch_list.shape)
+    print('remaining y filenames: ', len(y_filenames))
+  return x_batch_list, y_batch_list
 
 # step 3
 def merge_sparse_data(phase, class_type, exp_num):
     in_data = 'data/{}_{}_sparse/{}'.format(exp_num, class_type, phase)
     out_path = 'data/{}_{}_sparse/'.format(exp_num, class_type)
+    data_out_path = os.path.join(out_path, '{}_x_sparse'.format(phase))
+    labels_out_path = os.path.join(out_path, '{}_y_sparse'.format(phase))
+    if(os.path.exists(data_out_path+'.npz')):
+        print('loading data available at: ', data_out_path)
+        data = sparse.load_npz(data_out_path+'.npz')
+        print('loaded data shape: ', data.shape)
+        labels = np.load(labels_out_path+'.npy')
+        print('loaded labels shape: ', labels.shape)
+        return data, labels
+
     in_path = os.path.join(in_data, '*x*.npz')
     print('trying to find files in path: ', in_path)
     x_filenames = glob.glob(in_path)
@@ -394,6 +487,7 @@ def merge_sparse_data(phase, class_type, exp_num):
     print('Number of occurences for classes in label set: ', np.bincount(sparse_labels))
     u = np.unique(sparse_labels)
     print('unique labels in label set: ', u)
+    print('bincount in label set: ', np.bincount(sparse_labels))
     if(class_type == 'all' and u.shape[0] < 8):
        raise Exception('ERROR: did not get enough labels')
     print('sparse data shape: ', sparse_data.shape)
@@ -407,4 +501,6 @@ def merge_sparse_data(phase, class_type, exp_num):
     return sparse_data, sparse_labels
 
 if(__name__ == "__main__"):
-    merge_sparse_data(phase='train', class_type='all', exp_num='vae')
+    #convert_to_sparse('valid', 'all', 'bigan')
+    merge_sparse_data('valid', 'all', 'bigan')
+    #get_sparse_batch(phase='valid', class_type='all', exp_num='vae')

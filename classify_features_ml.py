@@ -83,7 +83,7 @@ while(os.path.exists(out_dir)):
 if(not os.path.exists(out_dir)):
 	os.mkdir(out_dir)
 	print('folder created: ', out_dir)
-
+'''
 #sparse data
 train_sparse_x_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'train_x_sparse.npz')
 train_sparse_y_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'train_y_sparse.npy')
@@ -96,19 +96,45 @@ print('train path: ', train_sparse_x_path)
 #TO-DO: check if npy data file exists, load directly, else load from the above method.
 if(os.path.exists(train_sparse_x_path)):
 	print('sparse npz data exists')
+	print('loading valid path: ', valid_sparse_x_path)
+	valid_sparse_x = scipy.sparse.load_npz(valid_sparse_x_path)
+	valid_y = np.load(valid_sparse_y_path).astype('int32')
+	print('loaded valid sparse data of shape x={},y={} type={}, dtype={}, indices dtype={}, indices shape={}'.format(valid_sparse_x.shape,valid_y.shape, type(valid_sparse_x), valid_sparse_x.dtype, valid_sparse_x.indices.dtype, valid_sparse_x.indices.shape))
+	if(valid_sparse_x.indices.dtype == 'int64'):
+		#convert dtype of indices from int64 to int32
+		v_indices = valid_sparse_x.indices.astype('int32', casting='safe')
+		if(np.array_equal(v_indices, valid_sparse_x.indices)):
+			print('both indices are equal')
+		else:
+			raise Exception('ERROR: indices are not equal')
+		v_data = valid_sparse_x.data
+		v_indptr = valid_sparse_x.indptr
+		new_valid_sparse_x = scipy.sparse.csr_matrix((v_data, v_indices, v_indptr), shape=valid_sparse_x.shape)
+		print('loaded new valid sparse data of shape x={},y={} type={}, dtype={}, indices dtype={}, indices shape={}'.format(new_valid_sparse_x.shape,valid_y.shape, type(new_valid_sparse_x), new_valid_sparse_x.dtype, new_valid_sparse_x.indices.dtype, new_valid_sparse_x.indices.shape))
+	#print('v indices: ', v_indices)
 	print('loading train path: ', train_sparse_x_path)
 	train_sparse_x = scipy.sparse.load_npz(train_sparse_x_path)
-	if(not scipy.sparse.issparse(train_sparse_x)):
-		raise Exception('ERROR: train data sparse is NOT sparse')
+	print('loaded train sparse of shape: ', train_sparse_x.shape)
 	train_y = np.load(train_sparse_y_path).astype('int32')
-	print('loaded train sparse data of shape x={},y={} type={}'.format(train_sparse_x.shape,train_y.shape, type(train_sparse_x)))
-	if(os.path.exists(valid_sparse_x_path)):
-		print('valid sparse npz available')
-		valid_sparse_x = scipy.sparse.load_npz(valid_sparse_x_path)
-		valid_y = np.load(valid_sparse_y_path).astype('int32')
-		train_sparse_x = scipy.sparse.vstack([train_sparse_x, valid_sparse_x])
-		train_y = np.concatenate([train_y, valid_y])
-		print('loaded train sparse data of shape x={},y={} type={}, dtype={}, indices dtype={}'.format(train_sparse_x.shape,train_y.shape, type(train_sparse_x), train_sparse_x.dtype, train_sparse_x.indices.dtype))
+	print('loaded train sparse data of shape x={},y={} type={}, dtype={}, indices dtype={}, indices shape={}'.format(train_sparse_x.shape,train_y.shape, type(train_sparse_x), train_sparse_x.dtype, train_sparse_x.indices.dtype, train_sparse_x.indices.shape))
+	if(train_sparse_x.indices.dtype == 'int64'):
+		t_indices = train_sparse_x.indices.astype('int32', casting='safe')
+		if(not np.array_equal(t_indices, train_sparse_x.indices)):
+			raise Exception('ERROR: new train indices not equal to old')
+		t_data = train_sparse_x.data
+		t_indptr = train_sparse_x.indptr
+		new_train_sparse_x = scipy.sparse.csr_matrix((t_data, t_indices, t_indptr), shape=train_sparse_x.shape)
+		print('loaded new train sparse data of shape x={},y={} type={}, dtype={}, indices dtype={}, indices shape={}'.format(new_train_sparse_x.shape,train_y.shape, type(new_train_sparse_x), new_train_sparse_x.dtype, new_train_sparse_x.indices.dtype, new_train_sparse_x.indices.shape))
+		train_sparse_x = new_train_sparse_x
+	#if(os.path.exists(valid_sparse_x_path)):
+	#	print('valid sparse npz available')
+	#	valid_sparse_x = scipy.sparse.load_npz(valid_sparse_x_path)
+	#	valid_y = np.load(valid_sparse_y_path).astype('int32')
+	#	print('loaded valid data: ', valid_sparse_x.shape, valid_y.shape)
+	#	print('trying to merge valid and train data')
+	#	train_sparse_x = scipy.sparse.vstack([train_sparse_x, valid_sparse_x])
+	#	train_y = np.concatenate([train_y, valid_y])
+	#	print('loaded train sparse data of shape x={},y={} type={}, dtype={}, indices dtype={}'.format(train_sparse_x.shape,train_y.shape, type(train_sparse_x), train_sparse_x.dtype, train_sparse_x.indices.dtype))
 	test_sparse_x = scipy.sparse.load_npz(test_sparse_x_path)
 	test_y = np.load(test_sparse_y_path).astype('int32')
 	print('loaded test sparse data of shape x={},y={} type={}'.format(test_sparse_x.shape,test_y.shape, type(test_sparse_x)))
@@ -209,7 +235,7 @@ else:
 	print('train shape={}, type={}'.format(train_sparse_x.shape, type(train_sparse_x)))
 	print('test shape={}, type={}'.format(test_sparse_x.shape, type(test_sparse_x)))
 
-
+'''
 now = datetime.datetime.now()
 now = now.strftime("%Y-%m-%d_%H_%M")
 #now = now.split()[0]
@@ -219,7 +245,7 @@ np.set_printoptions(precision=3)
 k_reg = regularizers.l2(0.001)
 
 def sgd():
-	clf = linear_model.SGDClassifier()
+	clf = linear_model.SGDClassifier(loss='hinge', penalty='l2', alpha=0.0001, l1_ratio=0.15, fit_intercept=True, max_iter=1000, tol=0.001, shuffle=True, verbose=0, epsilon=0.1, n_jobs=None, random_state=None, learning_rate='optimal', eta0=0.0, power_t=0.5, early_stopping=False, validation_fraction=0.1, n_iter_no_change=5, class_weight=None, warm_start=False, average=False) #all defaults
 	return clf
 
 def myLinearSVM():
@@ -240,8 +266,8 @@ def myRF():
                        criterion='gini', max_depth=None, max_features=None,
                        max_leaf_nodes=None, max_samples=None,
                        min_impurity_decrease=0.0, min_impurity_split=None,
-                       min_samples_leaf=1, min_samples_split=6,
-                       min_weight_fraction_leaf=0.0, n_estimators=1000,
+                       min_samples_leaf=1, min_samples_split=2,
+                       min_weight_fraction_leaf=0.0, n_estimators=100,
                        n_jobs=-1, oob_score=False, random_state=None, verbose=0,
                        warm_start=False)
 	return clf
@@ -267,9 +293,24 @@ def myVoting():
 	return voting_clf
 
 clf = None
-if('linear' in model_name):
-	#clf = myLinearSVM()
+if('sgd' in model_name):
+	valid_data_list, valid_labels_list = my_data_utils.get_sparse_batch('valid', class_type, exp_num)
+	print('valid data len={}, valid label len={}, valid_data[0].type={} valid_label[0].type={}'.format(len(valid_data_list), len(valid_labels_list), type(valid_data_list[0]), type(valid_labels_list[0])))
+	train_data_list, train_labels_list = my_data_utils.get_sparse_batch('train', class_type, exp_num)
+	print('train data len={}, train label len={}'.format(len(train_data_list), len(train_labels_list)))
+	#merge train and valid data
+	
+	for d, l in zip(valid_data_list, valid_labels_list):
+		train_data_list.append(d)
+		train_labels_list.append(l)
+	print('train data len={}, train label len={}'.format(len(train_data_list), len(train_labels_list)))
+	test_sparse_x_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'test_x_sparse.npz')
+	test_sparse_y_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'test_y_sparse.npy')
+	test_sparse_x = scipy.sparse.load_npz(test_sparse_x_path)
+	test_y = np.load(test_sparse_y_path).astype('int32')
+	print('loaded test sparse data of shape x={},y={} type={}'.format(test_sparse_x.shape,test_y.shape, type(test_sparse_x)))
 	clf = sgd()
+
 elif('svm' in model_name):
 	clf = mySVM()
 elif('rf' in model_name):
@@ -297,7 +338,17 @@ print(cm)
 
 
 print('training on our dataset')
-clf.fit(train_sparse_x, train_y)
+if('sgd' in model_name):
+	for i in range(len(train_data_list)):
+		print('batch: ', i)
+		train_batch_x = train_data_list[i]
+		train_batch_y = train_labels_list[i]
+		print('batch data types: ', type(train_batch_x), type(train_batch_y))
+		print('batch data shapes: ', train_batch_x.shape, train_batch_y.shape)
+		clf.partial_fit(X=train_batch_x, y=train_batch_y, classes=class_dic.values())
+else:
+	clf.fit(train_sparse_x, train_y)
+
 print('done training')
 y_pred = clf.predict(test_sparse_x)
 

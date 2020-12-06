@@ -33,7 +33,7 @@ class_type = args.class_type
 model_type = args.model_type.upper()
 model_index = 0
 model_name = model_type+str(model_index)
-train_epochs = 10
+train_epochs = 1
 batch_size = 1
 
 title = '{} classification of all 8 classes'.format(model_type)
@@ -48,6 +48,7 @@ while(os.path.exists(out_dir) and (len(os.listdir(out_dir)) > 0)):
 	model_index += 1
 	model_name = model_type+str(model_index)
 	out_dir = 'out/{}/{}'.format(exp_num, model_name)
+
 if(args.existing_model is not None):
 	print('getting model from: ', args.existing_model)
 	out_dir = 'out/{}/{}'.format(exp_num, args.existing_model)
@@ -146,18 +147,18 @@ def cnn():
         model = Sequential(name='shallow_CNN')
         model.add(Input(shape=(1600, 1600, 128)))
         #model.add(normalizer())
-        model.add(Conv2D(128, (3, 3), kernel_regularizer=k_reg))
+        model.add(Conv2D(128, (3, 3)))
         model.add(BatchNormalization())
         model.add(Activation('relu'))
         model.add(MaxPooling2D(pool_size=(4, 4)))
 
-        model.add(Conv2D(64, (3, 3), kernel_regularizer=k_reg))
+        model.add(Conv2D(64, (3, 3)))
         model.add(BatchNormalization())
         model.add(Activation('relu'))
         model.add(MaxPooling2D(pool_size=(4, 4)))
 
-        model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
-        model.add(Dense(128, kernel_regularizer=k_reg))
+        model.add(Flatten())  # this converts 3D feature maps to 1D feature vectors
+        model.add(Dense(128))
         model.add(Activation('relu'))
         model.add(Dropout(0.5))
         if(class_type == 'all'):
@@ -168,11 +169,12 @@ def cnn():
                 model.add(Activation('sigmoid'))
         return model
 
-if(model_type == 'CNN'):
-	#model = cnn()
+if(model_type == 'CNN' and args.existing_model is None):
+	model = cnn()
+elif(model_type == 'CNN' and args.existing_model is not None):
 	model_path = 'out/{}/{}/exp_{}_best_model.h5'.format(exp_num, args.existing_model, exp_num)
 	print('loading model from: ', model_path)
-	model = models.load_model(model_path)
+	model = models.load_model(model_path, compile=True)
 	
 elif(model_type == 'ANN'):
 	model = ann()
@@ -189,48 +191,52 @@ https://datascience.stackexchange.com/questions/41921/sparse-categorical-crossen
 '''
 if(class_type == 'binary'):
 	loss = 'binary_crossentropy'
+	metric = 'binary_accuracy'
 else:
 	loss = 'categorical_crossentropy'
+	metric = 'categorical_accuracy'
 
-model.compile(loss=loss,
+if(args.existing_model == None):
+	#if we are not loading an existing model
+	model.compile(loss=loss,
               optimizer=optimizer,
-              metrics=['accuracy'])
-print('optimizer: ', model.optimizer.get_config())
+              metrics=[metric])
+	print('optimizer: ', model.optimizer.get_config())
 
-log_dir = os.path.join(out_dir, "logs")
-patience = int(train_epochs*.1)
-print('lr will be reduced when no improvement after {} epochs'.format(patience))
-print('EarlyStopping will be when no improvement after {} epochs'.format(patience*2))
-callbacks = [callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1),
+	log_dir = os.path.join(out_dir, "logs")
+	patience = int(train_epochs*.1)
+	print('lr will be reduced when no improvement after {} epochs'.format(patience))
+	print('EarlyStopping will be when no improvement after {} epochs'.format(patience*2))
+	callbacks = [callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1),
 		callbacks.ReduceLROnPlateau(verbose=1, factor=0.2, patience=patience),
 		callbacks.EarlyStopping(verbose=1, patience=patience*2),
 		callbacks.ModelCheckpoint(filepath='{}/exp_{}_best_model.h5'.format(out_dir, exp_num),
 					save_best_only=True,
 					verbose=1)
 		]
-#define class_weight to support under-representative classes
-class_weight = {0:1, 1:1, 2:1, 3:1, 4:1, 5:1, 6:1, 7:1} #to be updated
-print('class weight: ', class_weight)
-history = model.fit(train_generator, 
+	#define class_weight to support under-representative classes
+	#class_weight = {0:1, 1:1, 2:1, 3:1, 4:1, 5:1, 6:1, 7:1} #to be updated
+	#print('class weight: ', class_weight)
+	history = model.fit(train_generator, 
 			epochs=train_epochs, 
 			steps_per_epoch=train_len,
 			validation_data=valid_generator,
 			validation_steps=valid_len,
 			callbacks=callbacks)
 
-print('train history results: ', history.history)
-# Plot training & validation loss values
-plt.plot(history.history['loss'], 'g--', label='Training Loss')
-plt.plot(history.history['val_loss'], '-', label='Validation Loss')
-plt.title('Training and Validation Loss, {}'.format(exp_num))
-plt.ylabel('Loss')
-plt.xlabel('Epoch')
-plt.legend(loc='upper right')
-plt.savefig('{}/exp_{}_train_loss_values.png'.format(out_dir, exp_num), dpi=300)
-plt.close()
-print('{}/exp_{}_train_loss_values.png SAVED'.format(out_dir, exp_num))
+	print('train history results: ', history.history)
+	# Plot training & validation loss values
+	plt.plot(history.history['loss'], 'g--', label='Training Loss')
+	plt.plot(history.history['val_loss'], '-', label='Validation Loss')
+	plt.title('Training and Validation Loss, {}'.format(exp_num))
+	plt.ylabel('Loss')
+	plt.xlabel('Epoch')
+	plt.legend(loc='upper right')
+	plt.savefig('{}/exp_{}_train_loss_values.png'.format(out_dir, exp_num), dpi=300)
+	plt.close()
+	print('{}/exp_{}_train_loss_values.png SAVED'.format(out_dir, exp_num))
 
-model.save('{}/exp_{}_model'.format(out_dir, exp_num))
+	model.save('{}/exp_{}_model'.format(out_dir, exp_num))
 
 #if(class_type == 'all'):
 #	results = model.evaluate(test_x, utils.to_categorical(test_y))
@@ -238,13 +244,21 @@ model.save('{}/exp_{}_model'.format(out_dir, exp_num))
 #	results = model.evaluate(test_x, test_y)
 #test_accuracy = results[1]
 #print('test accuracy: ', test_accuracy)
+
+results = model.evaluate(test_generator)
+print('test results: ', results)
+
+
 if(class_type == 'binary'):
-	y_pred = model.predict(test_x).squeeze().round().astype('int')
+	y_pred = model.predict(test_generator).squeeze().round().astype('int')
 else:
-	y_pred = model.predict(test_x)
+	y_pred = model.predict(test_generator)
 	y_pred = np.argmax(y_pred, axis=1)
 
 print('y pred shape: ', y_pred.shape)
+
+
+'''
 print('y test shape: ', test_y.shape)
 print('test_y[0]: ', test_y[0])
 print('y_pred[0]: ', y_pred[0])
@@ -284,5 +298,5 @@ plt.savefig(img_name, dpi=300)
 print('image saved in ', img_name)
 
 print(metrics.classification_report(test_y, y_pred))
-
+'''
 print('============================ done ================')
