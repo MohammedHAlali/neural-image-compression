@@ -18,6 +18,7 @@ class DataGenerator(keras.utils.Sequence):
         self.list_IDs = list_IDs
         self.on_epoch_end()
         self.model_type = model_type
+        self.classes = None
         #print('list_ids len: ', len(list_IDs))
     	
     def __len__(self):
@@ -25,11 +26,18 @@ class DataGenerator(keras.utils.Sequence):
         # 'Denotes the number of batches per epoch'
         return len(self.list_IDs)
     
+    def get_classes(list_IDs):
+        return self.classes
+
     def on_epoch_end(self):
         #  is a confusing method to indicate when epoch will end
         'Updates indexes after each epoch'
         self.indexes = np.arange(len(self.list_IDs))
-        np.random.shuffle(self.indexes)
+        if('test' in self.list_IDs[0]):
+            print('no shuffle in testing')
+        else:
+            print('perform shuffle')
+            np.random.shuffle(self.indexes)
         #print('indexes: ', self.indexes)
     
     def __data_generation(self, list_IDs_temp):
@@ -65,6 +73,7 @@ class DataGenerator(keras.utils.Sequence):
         #print('loaded y shape: ', y.shape)
         #print('label = ', y.item())
         return X, y
+
     def __getitem__(self, index):
         # is responsible for select 1 item at a time for training from the given list of file location
         # 'Generate one batch of data'
@@ -436,16 +445,17 @@ def get_sparse_batch(phase, class_type, exp_num):
           break
         #else:
         #  print('not wanted label: ', y.item())
-      #print('finished x mini batch len=: ', len(x_mini_batch))
-      x_mini_batch_sparse = sparse.vstack(x_mini_batch)
-      y_mini_batch_sparse = np.array(y_mini_batch)
-      #print('x mini batch sparse of type: ', type(x_mini_batch_sparse), ' shape: ', x_mini_batch_sparse.shape)
+    #convert to sparse after adding all 8 elements  
+    x_mini_batch_sparse = sparse.vstack(x_mini_batch)
+    y_mini_batch_sparse = np.array(y_mini_batch)
+    print('x mini batch sparse of type: ', type(x_mini_batch_sparse), ' shape: ', x_mini_batch_sparse.shape)
     # add mini batch list to big list
     x_batch_list.append(x_mini_batch_sparse)
     y_batch_list.append(y_mini_batch_sparse)
-    print('y batch list: ', y_batch_list)
+    #print('y batch list: ', y_batch_list)
     #print('y batch list len: ', y_batch_list.shape)
     print('remaining y filenames: ', len(y_filenames))
+  print('y batch list: ', y_batch_list)
   return x_batch_list, y_batch_list
 
 # step 3

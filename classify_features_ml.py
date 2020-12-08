@@ -325,15 +325,16 @@ else:
 print('classifier: ', clf)
 ############ check if the model works on simple dataset #####################
 from sklearn import datasets
-toy_X, toy_y = datasets.load_iris(return_X_y=True)
+toy_X, toy_y = datasets.load_breast_cancer(return_X_y=True)
 toy_X_train, toy_X_test, toy_y_train, toy_y_test = train_test_split(
-		toy_X, toy_y, test_size=0.4, random_state=0)
+		toy_X, toy_y, random_state=0)
+print('shapes of sklearn breast cancer dataset: ', toy_X.shape, toy_y.shape)
 toy_clf = clf
 toy_clf.fit(toy_X_train, toy_y_train)
-print('test score on iris dataset: ', toy_clf.score(toy_X_test, toy_y_test))
+print('test score on sklearn breast cancer dataset: ', toy_clf.score(toy_X_test, toy_y_test))
 toy_y_pred = clf.predict(toy_X_test)
 cm = metrics.confusion_matrix(toy_y_test, toy_y_pred)
-print('confusion_matrix of iris dataset')
+print('confusion_matrix of sklearn breast cancer dataset')
 print(cm)
 
 
@@ -345,7 +346,9 @@ if('sgd' in model_name):
 		train_batch_y = train_labels_list[i]
 		print('batch data types: ', type(train_batch_x), type(train_batch_y))
 		print('batch data shapes: ', train_batch_x.shape, train_batch_y.shape)
-		clf.partial_fit(X=train_batch_x, y=train_batch_y, classes=class_dic.values())
+		classes = np.array(class_dic.values())
+		print('classes: ', classes)
+		clf.partial_fit(X=train_batch_x, y=train_batch_y, classes=classes))
 else:
 	clf.fit(train_sparse_x, train_y)
 

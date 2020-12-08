@@ -33,7 +33,7 @@ class_type = args.class_type
 model_type = args.model_type.upper()
 model_index = 0
 model_name = model_type+str(model_index)
-train_epochs = 1
+train_epochs = 2
 batch_size = 1
 
 title = '{} classification of all 8 classes'.format(model_type)
@@ -147,12 +147,12 @@ def cnn():
         model = Sequential(name='shallow_CNN')
         model.add(Input(shape=(1600, 1600, 128)))
         #model.add(normalizer())
-        model.add(Conv2D(128, (3, 3)))
+        model.add(Conv2D(10, (3, 3)))
         model.add(BatchNormalization())
         model.add(Activation('relu'))
         model.add(MaxPooling2D(pool_size=(4, 4)))
 
-        model.add(Conv2D(64, (3, 3)))
+        model.add(Conv2D(10, (3, 3)))
         model.add(BatchNormalization())
         model.add(Activation('relu'))
         model.add(MaxPooling2D(pool_size=(4, 4)))
@@ -257,8 +257,7 @@ else:
 
 print('y pred shape: ', y_pred.shape)
 
-
-'''
+test_y = test_generator.classes #y_true
 print('y test shape: ', test_y.shape)
 print('test_y[0]: ', test_y[0])
 print('y_pred[0]: ', y_pred[0])
@@ -298,5 +297,5 @@ plt.savefig(img_name, dpi=300)
 print('image saved in ', img_name)
 
 print(metrics.classification_report(test_y, y_pred))
-'''
+
 print('============================ done ================')
