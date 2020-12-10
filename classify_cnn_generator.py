@@ -174,7 +174,9 @@ if(model_type == 'CNN' and args.existing_model is None):
 elif(model_type == 'CNN' and args.existing_model is not None):
 	model_path = 'out/{}/{}/exp_{}_best_model.h5'.format(exp_num, args.existing_model, exp_num)
 	print('loading model from: ', model_path)
-	model = models.load_model(model_path, compile=True)
+	if(not os.path.exists(model_path)):
+		raise Exception('ERROR: model does not exists in path')
+	model = models.load_model(model_path, compile=False)
 	
 elif(model_type == 'ANN'):
 	model = ann()

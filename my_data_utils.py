@@ -18,7 +18,7 @@ class DataGenerator(keras.utils.Sequence):
         self.list_IDs = list_IDs
         self.on_epoch_end()
         self.model_type = model_type
-        self.classes = None
+        self.classes = self.get_classes()
         #print('list_ids len: ', len(list_IDs))
     	
     def __len__(self):
@@ -26,8 +26,23 @@ class DataGenerator(keras.utils.Sequence):
         # 'Denotes the number of batches per epoch'
         return len(self.list_IDs)
     
-    def get_classes(list_IDs):
-        return self.classes
+    def get_classes(self):
+        classes = []
+        print('getting classes')
+        #print('indexes: ', self.indexes)
+        filename = self.list_IDs[0]
+        print('filename: ', filename)
+        #ID = filename[filename.rfind('_')+1:]
+        for n in self.indexes:
+            y_file_path = os.path.join(filename[:filename.rfind('/')], 'y_'+str(n)+'.npy')
+            print('index: ', n, ', trying to read file: ', y_file_path)
+            if(not os.path.exists(y_file_path)):
+                raise Exception('ERROR: file not exists')
+            #print('file exists')
+            y = np.load(y_file_path)
+            classes.append(y.item())
+            #print('loded y : ', y.item())
+        return np.array(classes)
 
     def on_epoch_end(self):
         #  is a confusing method to indicate when epoch will end
@@ -52,7 +67,7 @@ class DataGenerator(keras.utils.Sequence):
         x_file_path = os.path.join(filename[:filename.rfind('/')], 'x_'+ID)
         y_file_path = os.path.join(filename[:filename.rfind('/')], 'y_'+ID)
         #print('trying to load data: ', x_file_path)
-        #print('trying to load label: ', y_file_path)
+        print('trying to load label: ', y_file_path)
         
         # Store sample
         X = np.load(x_file_path)
@@ -411,7 +426,7 @@ def get_sparse_batch(phase, class_type, exp_num):
   if(len(y_filenames) != len(x_filenames)):
     raise Exception('ERROR: x and y lists are not equal. x len={}, y len={}'.format(len(x_filenames), len(y_filenames)))
   while(len(y_filenames) > 0):
-    print('len y_filenames = ', len(y_filenames))
+    #print('len y_filenames = ', len(y_filenames))
     x_mini_batch = []
     y_mini_batch = []
     for label in range(8): #each iteration gets one different label 
@@ -452,7 +467,7 @@ def get_sparse_batch(phase, class_type, exp_num):
     # add mini batch list to big list
     x_batch_list.append(x_mini_batch_sparse)
     y_batch_list.append(y_mini_batch_sparse)
-    #print('y batch list: ', y_batch_list)
+    print('x batch list len: ', len(x_batch_list))
     #print('y batch list len: ', y_batch_list.shape)
     print('remaining y filenames: ', len(y_filenames))
   print('y batch list: ', y_batch_list)
