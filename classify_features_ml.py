@@ -85,31 +85,35 @@ if(not os.path.exists(out_dir)):
 	print('folder created: ', out_dir)
 
 #sparse data
-train_sparse_x_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'train_x_sparse.npz')
-train_sparse_y_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'train_y_sparse.npy')
-valid_sparse_x_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'valid_x_sparse.npz')
-valid_sparse_y_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'valid_y_sparse.npy')
-test_sparse_x_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'test_x_sparse.npz')
-test_sparse_y_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'test_y_sparse.npy')
+p = 'data/{}_{}_sparse'.format(exp_num, class_type)
+train_sparse_x_path = os.path.join(p, 'train_x_sparse.npz')
+train_sparse_y_path = os.path.join(p, 'train_y_sparse.npy')
+valid_sparse_x_path = os.path.join(p, 'valid_x_sparse.npz')
+valid_sparse_y_path = os.path.join(p, 'valid_y_sparse.npy')
+test_sparse_x_path = os.path.join(p, 'test_x_sparse.npz')
+test_sparse_y_path = os.path.join(p, 'test_y_sparse.npy')
 print('train path: ', train_sparse_x_path)
 
-if(model_type == 'sgd'):
-    valid_data_list, valid_labels_list = my_data_utils.get_sparse_batch('valid', class_type, exp_num)
-    print('valid data len={}, valid label len={}, valid_data[0].type={} valid_label[0].type={}'.format(len(valid_data_list), len(valid_labels_list), type(valid_data_list[0]), type(valid_labels_list[0])))
+if(args.model_type == 'sgd'):
+    #valid_data_list, valid_labels_list = my_data_utils.get_sparse_batch('valid', class_type, exp_num)
+    #print('valid data len={}, valid label len={}, valid_data[0].type={} valid_label[0].type={}'.format(len(valid_data_list), len(valid_labels_list), type(valid_data_list[0]), type(valid_labels_list[0])))
     train_data_list, train_labels_list = my_data_utils.get_sparse_batch('train', class_type, exp_num)
     print('train data len={}, train label len={}'.format(len(train_data_list), len(train_labels_list)))
-    #merge train and valid data
+    #DO NOT merge train and valid data
 
-    for d, l in zip(valid_data_list, valid_labels_list):
-        train_data_list.append(d)
-        train_labels_list.append(l)
-    print('train data len={}, train label len={}'.format(len(train_data_list), len(train_labels_list)))
-    test_sparse_x_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'test_x_sparse.npz')
-    test_sparse_y_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'test_y_sparse.npy')
+    #for d, l in zip(valid_data_list, valid_labels_list):
+    #    train_data_list.append(d)
+    #    train_labels_list.append(l)
+    #print('train data len={}, train label len={}'.format(len(train_data_list), len(train_labels_list)))
+    #test_sparse_x_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'test_x_sparse.npz')
+    #test_sparse_y_path = os.path.join('data/{}_{}_sparse'.format(exp_num, class_type), 'test_y_sparse.npy')
+    valid_sparse_x = scipy.sparse.load_npz(valid_sparse_x_path)
     test_sparse_x = scipy.sparse.load_npz(test_sparse_x_path)
+    valid_y = np.load(valid_sparse_y_path).astype('int32')
     test_y = np.load(test_sparse_y_path).astype('int32')
     print('loaded test sparse data of shape x={},y={} type={}'.format(test_sparse_x.shape,test_y.shape, type(test_sparse_x)))
-#TO-DO: check if npy data file exists, load directly, else load from the above method.
+    print('loaded valid sparse data of shape x={},y={} type={}'.format(valid_sparse_x.shape,valid_y.shape, type(valid_sparse_x)))
+#check if npy data file exists, load directly, else load from the above method.
 elif(os.path.exists(train_sparse_x_path)):
 	print('sparse npz data exists')
 	print('loading valid path: ', valid_sparse_x_path)
@@ -133,15 +137,15 @@ elif(os.path.exists(train_sparse_x_path)):
 	print('loaded train sparse of shape: ', train_sparse_x.shape)
 	train_y = np.load(train_sparse_y_path).astype('int32')
 	print('loaded train sparse data of shape x={},y={} type={}, dtype={}, indices dtype={}, indices shape={}'.format(train_sparse_x.shape,train_y.shape, type(train_sparse_x), train_sparse_x.dtype, train_sparse_x.indices.dtype, train_sparse_x.indices.shape))
-	if(train_sparse_x.indices.dtype == 'int64'):
-		t_indices = train_sparse_x.indices.astype('int32', casting='safe')
-		if(not np.array_equal(t_indices, train_sparse_x.indices)):
-			raise Exception('ERROR: new train indices not equal to old')
-		t_data = train_sparse_x.data
-		t_indptr = train_sparse_x.indptr
-		new_train_sparse_x = scipy.sparse.csr_matrix((t_data, t_indices, t_indptr), shape=train_sparse_x.shape)
-		print('loaded new train sparse data of shape x={},y={} type={}, dtype={}, indices dtype={}, indices shape={}'.format(new_train_sparse_x.shape,train_y.shape, type(new_train_sparse_x), new_train_sparse_x.dtype, new_train_sparse_x.indices.dtype, new_train_sparse_x.indices.shape))
-		train_sparse_x = new_train_sparse_x
+	#if(train_sparse_x.indices.dtype == 'int64'):
+	#	t_indices = train_sparse_x.indices.astype('int32', casting='safe')
+	#	if(not np.array_equal(t_indices, train_sparse_x.indices)):
+	#		raise Exception('ERROR: new train indices not equal to old')
+	#	t_data = train_sparse_x.data
+	#	t_indptr = train_sparse_x.indptr
+	#	new_train_sparse_x = scipy.sparse.csr_matrix((t_data, t_indices, t_indptr), shape=train_sparse_x.shape)
+	#	print('loaded new train sparse data of shape x={},y={} type={}, dtype={}, indices dtype={}, indices shape={}'.format(new_train_sparse_x.shape,train_y.shape, type(new_train_sparse_x), new_train_sparse_x.dtype, new_train_sparse_x.indices.dtype, new_train_sparse_x.indices.shape))
+	#	train_sparse_x = new_train_sparse_x
 	#if(os.path.exists(valid_sparse_x_path)):
 	#	print('valid sparse npz available')
 	#	valid_sparse_x = scipy.sparse.load_npz(valid_sparse_x_path)
@@ -342,18 +346,22 @@ print(cm)
 
 print('training on our dataset')
 if('sgd' in model_name):
-	for i in range(len(train_data_list)):
-		print('batch: ', i)
-		train_batch_x = train_data_list[i]
-		train_batch_y = train_labels_list[i]
-		print('batch data types: ', type(train_batch_x), type(train_batch_y))
-		print('batch data shapes: ', train_batch_x.shape, train_batch_y.shape)
-		if(class_type == 'all'):
-			classes = np.array([0, 1, 2, 3, 4, 5, 6, 7])
-		else:
-			classes = np.array([0, 1])
-		print('classes: ', classes)
-		clf.partial_fit(X=train_batch_x, y=train_batch_y, classes=classes)
+	for ep in range(5):
+		print('epoch #:', ep)
+		for i in range(len(train_data_list)-1):
+			print('batch: ', i)
+			#train_batch_x = np.array([train_data_list[i], train_data_list[i+1]])
+			batch_x = [train_data_list[i], train_data_list[i+1]]
+			train_batch_x = scipy.sparse.vstack(batch_x)
+			train_batch_y = np.array([train_labels_list[i], train_labels_list[i+1]])
+			print('batch data types: ', type(train_batch_x), type(train_batch_y))
+			print('batch data shapes: ', train_batch_x.shape, train_batch_y.shape)
+			if(class_type == 'all'):
+				classes = np.array([0, 1, 2, 3, 4, 5, 6, 7])
+			else:
+				classes = np.array([0, 1])
+			print('classes: ', classes)
+			clf.partial_fit(X=train_batch_x, y=train_batch_y, classes=classes)
 else:
 	clf.fit(train_sparse_x, train_y)
 

@@ -5,6 +5,7 @@ import shutil
 import argparse
 import glob
 import os
+os.environ['MPLCONFIGDIR'] = '/tmp/'
 import multiprocessing as mlt
 from sklearn.manifold import TSNE
 from image_slicer import slice
@@ -153,7 +154,7 @@ def save_n_plot_arr(arr, file_out_name):
 
 def augment(arr, class_name, image_id):
     print('trying to augment: ', image_id)
-    image_id = image_id[:-6]
+    image_id = image_id[:-2]
     file_out_name = 'gfv_{}_{}{}'.format(class_name, image_id, '0')
     file_out_path = os.path.join(out_dir, file_out_name+'.npy')
     if(not os.path.exists(file_out_path)):
@@ -161,7 +162,9 @@ def augment(arr, class_name, image_id):
         save_n_plot_arr(arr, file_out_name)
     else:
         print(file_out_path, ' exists')
-
+    if(phase == 'valid' or phase == 'test'):
+        print('no need for augmnetation in validation or testing')
+        return None
     #vertically flip the original array and save
     ver_flip = np.flip(arr, 0)
     print('vertical flipped shape: ', ver_flip.shape)
@@ -233,7 +236,7 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 		img_id = first_image[:30]
 		#print('image_id: ', img_id)
 		#check if npy file already exists
-		file_out_name = 'gfv_{}_{}{}'.format(class_name, img_id[:-6], '0') #original image
+		file_out_name = 'gfv_{}_{}{}'.format(class_name, img_id[:-2], '0') #original image
 		file_out_path = os.path.join(out_dir, file_out_name)
 		if(os.path.exists(file_out_path+'.npy')):
 			print('file exists: ', file_out_path)
@@ -344,7 +347,7 @@ if(__name__ == "__main__"):
 	n_cores = mlt.cpu_count()
 	print('number of available cpus: ', n_cores)
 	parser = argparse.ArgumentParser()
-	parser.add_argument('model_name', help='bigan, constrastive, ..etc')
+	parser.add_argument('model_name', help='bigan, vae, ..etc')
 	parser.add_argument('phase', help='train, valid, or test')
 	parser.add_argument('class_index', type=int, help='from 0 to 7')
 	args = parser.parse_args()
@@ -366,7 +369,7 @@ if(__name__ == "__main__"):
 	class_names = ['breast', 'colon', 'lung', 'panc', 
 			'normal_breast', 'normal_colon', 'normal_lung', 'normal_panc']
 	c = class_names[args.class_index]
-	input_path = '/common/shigroup/azizank/data/color_normalized/{}/{}_*'.format(args.phase, c)
+	input_path = '/common/deogun/alali/data/color_normalized/{}/{}_*'.format(args.phase, c)
 	out_dir = os.path.join(out_dir, c)
 	if(not os.path.exists(out_dir)):
 		os.mkdir(out_dir)
@@ -416,9 +419,9 @@ if(__name__ == "__main__"):
 	#distributing work to 10 or less processes
 	if(case_id_length == 0):
 		raise ValueError('ERROR: no images found')
-	elif(case_id_length < 10 or case_id_length == 19):
+	elif(case_id_length < 20):
 		num_processes = case_id_length
-	elif(case_id_length >= 10):
+	elif(case_id_length >= 20):
 		num_processes = 10
 	else:
 		raise Exception('ERROR: unknown case id length=', case_id_length)
