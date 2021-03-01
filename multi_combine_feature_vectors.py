@@ -62,6 +62,7 @@ def slicer(image_name, slice_size, out_dir):
 	'''
 	#check if slices have been created previously
 	#convert out_dir to new location for 128-sized images
+	#print('\ttrying to slice image={}, to size={}, save in dir={}'.format(image_name, slice_size, out_dir))
 	src = out_dir
 	splitted = os.path.normpath(out_dir).split(os.path.sep)
 	temp = splitted[5]
@@ -80,8 +81,9 @@ def slicer(image_name, slice_size, out_dir):
 	if(len(slices_names) == 64):
 		return slices_names
 	elif(len(slices_names) > 0):
-		raise Exception('ERROR: not complete slices available in path={}, len={}'.format(out_dir, len(out_dir)))
+		raise Exception('ERROR: not complete slices available in path={}, len={}'.format(out_dir, len(slices_names)))
 	elif(len(slices_names) == 0): #no slices available, create them now
+		#print('\t\tno available slices, let us create them')
 		filename, file_ext = os.path.splitext(image_name)
 		try:
 			big_img = Image.open(image_name)
@@ -93,7 +95,7 @@ def slicer(image_name, slice_size, out_dir):
 		for i in range(0, height//slice_size):
 			for j in range(0, width//slice_size):
 				box = (j*slice_size, i*slice_size, (j+1)*slice_size, (i+1)*slice_size)
-				#print('\t[{},{}]'.format(i, j))
+				#print('\t[i={},j={}], box={}'.format(i, j, box))
 				s = big_img.crop(box)
 				if(s.size != (slice_size, slice_size)):
 					raise Exception('ERROR: slice size is not correct, size=', s.size)
@@ -106,6 +108,8 @@ def slicer(image_name, slice_size, out_dir):
 				s.save(out_name)
 				slices_names.append(out_name)
 				#print('\tsaved slice in ', out_name)
+	if(len(slices_names) != 64):
+		raise Exception('ERROR: produces number of slices of len=', len(slices_names))
 	return slices_names
 
 def save_n_plot_arr(arr, file_out_name):
@@ -135,10 +139,12 @@ def save_n_plot_arr(arr, file_out_name):
     #print(filename, ' SAVED')
     gfv_mean = np.mean(arr, axis=2)
     print('gfv 2d shape: ', gfv_mean.shape)
-    print('max: ', np.amax(arr))
-    print('min: ', np.amin(arr))
-    print('mean: ', np.mean(arr))
-    print('Does gfv_mean contain NaN?: ', np.any(np.isnan(gfv_mean)))
+    #print('max: ', np.amax(arr))
+    #print('min: ', np.amin(arr))
+    #print('mean: ', np.mean(arr))
+    #print('Does gfv_mean contain NaN?: ', np.any(np.isnan(gfv_mean)))
+    if(np.any(np.isnan(gfv_mean))):
+        raise Exception('ERROR: gfv contains NaN')
     ax = sns.heatmap(gfv_mean, vmin=0, vmax=1)
     plt.savefig(file_out_path+'_mean.png', dpi=300)
     plt.clf()
@@ -242,14 +248,14 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 			print('file exists: ', file_out_path)
 			#continue
 			arr = np.load(file_out_path+'.npy')
-			print('loaded shape: ', arr.shape)
+			#print('loaded shape: ', arr.shape)
 			augment(arr, class_name, img_id)
 			continue
 		else:
 			print('file does NOT exists: ', file_out_path)
 			#continue
 		global_feature_vector = np.ones((200*8, 200*8, encoding_size))*np.nan
-		print('global feature vector shape: ', global_feature_vector.shape)
+		#print('global feature vector shape: ', global_feature_vector.shape)
 		img_number_of_features = 0
 		for i, (x,y) in enumerate(x_y_pairs):
 			image_name = '{}/*region{}-{}_*.png'.format(case_path, x, y)
@@ -258,7 +264,7 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 			#print('patches: ', patches)
 			#if this patch of location [i,j] is actually available
 			name = patches[0]
-			if(i % 500 == 0):
+			if(i % 250 == 0):
 				print('\t[{}/{}] : {}'.format(i, len(x_y_pairs), name))
 			name_only, ext = os.path.splitext(name)
 			slices_names1 = slicer(name, 128, os.path.join(case_path, name_only))
@@ -298,7 +304,7 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 				This baseline method transfers 128x128 tiles to 128 vector
 				We transfer 1024x1024 to 128 vector
 				To use this baseline method, we need to transfer our 1024x1024 tile to
-				64 tiles of size 128x128, then we'll have 64 vectors of size 128 instead of 1 vector of size 128 in our method. So the global feature vector here will be of size [200*64=12800, 12900, 64]
+				64 tiles of size 128x128, then we'll have 64 vectors of size 128 instead of 1 vector of size 128 in our method. So the global feature vector here will be of size [200*8=1600, 1600, 128]
 					'''
 				
 			out_x_index = int(x)*8
@@ -377,40 +383,7 @@ if(__name__ == "__main__"):
 	print('input path: ', input_path)
 	case_id_paths = glob.glob(input_path)
 	print('exploring {} case id paths'.format(len(case_id_paths)))
-	'''	
-	if(c == 'panc' and args.phase == 'train'):
-		new_case_id_paths = []
-		for cc in case_id_paths:
-			#if('panc_S4-A8RO-01Z-00-DX1' in cc): #running
-			#	new_case_id_paths.append(cc)
-			#if('panc_YY-A8LH-01Z-00-DX1' in cc):
-			#	new_case_id_paths.append(cc)
-			if('panc_US-A779-01Z-00-DX1' in cc):
-				new_case_id_paths.append(cc)
-		if(len(new_case_id_paths) == 0):
-			raise Exception('ERROR: could not find elements.')
-		else:
-			print('new id paths: ', new_case_id_paths)
-			case_id_paths = new_case_id_paths
-	if(c == 'lung' and args.phase == 'train'):
-		new_case_id_paths = []
-		for cc in case_id_paths:
-			#if('lung_49-4512-DX1' in cc): #takes more than 5 hrs #running
-			#	new_case_id_paths.append(cc)
-			#if('lung_49-4512-DX5' in cc):
-			#	new_case_id_paths.append(cc)
-			#elif('lung_49-4512-DX2' in cc):
-			#	new_case_id_paths.append(cc)
-			if('lung_05-4403' in cc):
-				new_case_id_paths.append(cc)
-			#elif('lung_62-A46U' in cc):
-			#	new_case_id_paths.append(cc)
-		if(len(new_case_id_paths) == 0):
-			raise Exception('ERROR: could not find elements.')
-		else:
-			print('new id paths: ', new_case_id_paths)
-			case_id_paths = new_case_id_paths
-	'''
+		
 	case_id_length = len(case_id_paths)
 	print('number of case ids: ', case_id_length)
 	if(len(case_id_paths) == 0):
@@ -419,9 +392,9 @@ if(__name__ == "__main__"):
 	#distributing work to 10 or less processes
 	if(case_id_length == 0):
 		raise ValueError('ERROR: no images found')
-	elif(case_id_length < 20):
+	elif(case_id_length % 10 != 0):
 		num_processes = case_id_length
-	elif(case_id_length >= 20):
+	elif(case_id_length % 10 == 0):
 		num_processes = 10
 	else:
 		raise Exception('ERROR: unknown case id length=', case_id_length)

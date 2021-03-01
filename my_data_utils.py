@@ -526,6 +526,8 @@ def merge_sparse_data(phase, class_type, exp_num):
     return sparse_data, sparse_labels
 
 if(__name__ == "__main__"):
+    # step 1
+    save_data_label(phase, class_type, exp_num)
     #convert_to_sparse('valid', 'all', 'bigan')
-    merge_sparse_data('valid', 'all', 'bigan')
+    #merge_sparse_data('valid', 'all', 'bigan')
     #get_sparse_batch(phase='valid', class_type='all', exp_num='vae')
