@@ -294,12 +294,13 @@ def save_data_label(phase, class_type, exp_num):
     class_dic = {'breast':0, 'colon':1, 'lung':2, 'panc':3,
 		'normal_breast':4, 'normal_colon':5, 'normal_lung':6, 'normal_panc':7}
     class_names = class_dic.keys()
-    data_path = 'data/{}/{}'.format(exp_num, phase)
+    base_path = '/common/deogun/alali/data/neural-image-compression'
+    data_path = '{}/{}/{}'.format(base_path, exp_num, phase)
     print('loading data from path: ', data_path)
-    out_path = 'data/{}_{}/'.format(exp_num, class_type)
+    out_path = '{}/{}_{}/'.format(base_path, exp_num, class_type)
     if(not os.path.exists(out_path)):
         os.mkdir(out_path)
-    out_path = 'data/{}_{}/{}'.format(exp_num, class_type, phase)
+    out_path = '{}/{}_{}/{}'.format(base_path, exp_num, class_type, phase)
     if(not os.path.exists(out_path)):
         os.mkdir(out_path)
     print('saving data to path: ', out_path)
@@ -328,6 +329,7 @@ def save_data_label(phase, class_type, exp_num):
             f = os.path.join(class_path, f)
             print('[{}/{}] file: {} '.format(i, len(files), f))
             arr = np.load(f)
+            arr = np.array(arr)
             print('loaded file shape: ', arr.shape)
             if(np.any(np.isnan(arr))):
                 print('yes, it contains NaNs')
@@ -337,7 +339,7 @@ def save_data_label(phase, class_type, exp_num):
             data_out_path = os.path.join(out_path, 'x_{}'.format(unique_idx))
             label_out_path = os.path.join(out_path, 'y_{}'.format(unique_idx))
             print('trying to save : ', data_out_path)
-            np.save(data_out_path, np.array(arr))
+            np.save(data_out_path, arr)
             print(data_out_path, ' SAVED')
             label = np.array(label)
             print('label = ', label.item())
@@ -356,8 +358,9 @@ def save_data_label(phase, class_type, exp_num):
 # step 2
 def convert_to_sparse(phase, class_type, exp_num):
     print('trying to convert dataset to sparse')
-    in_path = 'data/{}_{}/{}'.format(exp_num, class_type, phase)
-    out_path = 'data/{}_{}_sparse'.format(exp_num, class_type)
+    base_path = '/common/deogun/alali/data/neural-image-compression'
+    in_path = '{}/{}_{}/{}'.format(base_path, exp_num, class_type, phase)
+    out_path = '{}/{}_{}_sparse'.format(base_path, exp_num, class_type)
     if(not os.path.exists(out_path)):
         os.mkdir(out_path)
     out_path = os.path.join(out_path, phase)
@@ -380,7 +383,7 @@ def convert_to_sparse(phase, class_type, exp_num):
         print('trying to open y file: ', y_filename)
         y = np.load(y_filename).astype('int')
         labels.append(y.item())
-        print('labels = : ', labels)
+        #print('labels = : ', labels)
         if(os.path.exists(save_path+'.npz')):
             print('file EXISTS: ', save_path)
             continue
@@ -396,13 +399,15 @@ def convert_to_sparse(phase, class_type, exp_num):
         sp = sparse.csr_matrix(ar, dtype='float64')
         #save sparse in out_path 
         #save_path = os.path.join(out_path, 'sparse_x_{}'.format(ID))
-        print('trying to save file: ', save_path)
-        sparse.save_npz(save_path, sp)
-        print('saved')
-        #print('label = ', y.item())
         y_save_path = os.path.join(out_path, 'sparse_y_{}'.format(ID))
-        print('trying to save y file: ', y_save_path)
-        np.save(y_save_path, y)
+        if(os.path.exists(save_path+'.npz') and os.path.exists(y_save_path+'.npz')):
+            print('files exists: ', save_path, y_save_path)
+        else:
+            sparse.save_npz(save_path, sp)
+            print('x file saved: ', save_path)
+            #print('label = ', y.item())
+            np.save(y_save_path, y)
+            print('y file saved: ', y_save_path)
     all_labels = np.array(labels)
     u = np.unique(all_labels)
     print('unique labels in labels set: ', u)
@@ -526,8 +531,18 @@ def merge_sparse_data(phase, class_type, exp_num):
     return sparse_data, sparse_labels
 
 if(__name__ == "__main__"):
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('phase', help='train, valid, test')
+    parser.add_argument('exp_num', help='ex: huber30, log25, etc')
+    parser.add_argument('class_type', help='all or binary')
+    args = parser.parse_args()
     # step 1
-    save_data_label(phase, class_type, exp_num)
+    #save_data_label(args.phase, args.class_type, args.exp_num)
+    # step 2
+    convert_to_sparse(args.phase, args.class_type, args.exp_num)
+    # step 3
+    #merge_sparse_data(args.phase, args.class_type, args.exp_num)
     #convert_to_sparse('valid', 'all', 'bigan')
     #merge_sparse_data('valid', 'all', 'bigan')
     #get_sparse_batch(phase='valid', class_type='all', exp_num='vae')

@@ -114,7 +114,7 @@ def slicer(image_name, slice_size, out_dir):
 
 def save_n_plot_arr(arr, file_out_name):
     file_out_path = os.path.join(out_dir, file_out_name)
-    #print('trying to save: ', file_out_path)
+    print('trying to save: ', file_out_path)
     if(os.path.exists(os.path.join(out_dir, file_out_name))):
         print('FILE EXISTS: ',file_out_path)
         return None
@@ -246,11 +246,11 @@ def combine_features(class_name, case_id_paths, model_path, out_dir, encoding_si
 		file_out_path = os.path.join(out_dir, file_out_name)
 		if(os.path.exists(file_out_path+'.npy')):
 			print('file exists: ', file_out_path)
-			#continue
-			arr = np.load(file_out_path+'.npy')
-			#print('loaded shape: ', arr.shape)
-			augment(arr, class_name, img_id)
 			continue
+			#arr = np.load(file_out_path+'.npy')
+			#print('loaded shape: ', arr.shape)
+			#augment(arr, class_name, img_id)
+			#continue
 		else:
 			print('file does NOT exists: ', file_out_path)
 			#continue
@@ -362,7 +362,7 @@ if(__name__ == "__main__"):
 	print('model_name = ', args.model_name)
 	phase = args.phase
 	model_name = args.model_name
-	out_dir = os.path.join('data', model_name)
+	out_dir = os.path.join('/common/deogun/alali/data/neural-image-compression', model_name)
 	if(not os.path.exists(out_dir)):
 		os.mkdir(out_dir)
 	print('folder created: ', out_dir)
@@ -373,7 +373,7 @@ if(__name__ == "__main__"):
 	model_path = 'models/encoders_patches_pathology/encoder_{}.h5'.format(model_name)
 	print('loading model from: ', model_path)
 	class_names = ['breast', 'colon', 'lung', 'panc', 
-			'normal_breast', 'normal_colon', 'normal_lung', 'normal_panc']
+				'normal_breast', 'normal_colon', 'normal_lung', 'normal_panc']
 	c = class_names[args.class_index]
 	input_path = '/common/deogun/alali/data/color_normalized/{}/{}_*'.format(args.phase, c)
 	out_dir = os.path.join(out_dir, c)
@@ -383,7 +383,7 @@ if(__name__ == "__main__"):
 	print('input path: ', input_path)
 	case_id_paths = glob.glob(input_path)
 	print('exploring {} case id paths'.format(len(case_id_paths)))
-		
+	np.random.shuffle(case_id_paths)
 	case_id_length = len(case_id_paths)
 	print('number of case ids: ', case_id_length)
 	if(len(case_id_paths) == 0):
@@ -392,10 +392,10 @@ if(__name__ == "__main__"):
 	#distributing work to 10 or less processes
 	if(case_id_length == 0):
 		raise ValueError('ERROR: no images found')
-	elif(case_id_length % 10 != 0):
+	elif(case_id_length % 5 != 0):
 		num_processes = case_id_length
-	elif(case_id_length % 10 == 0):
-		num_processes = 10
+	elif(case_id_length % 5 == 0):
+		num_processes = 5
 	else:
 		raise Exception('ERROR: unknown case id length=', case_id_length)
 	list_groups = []
