@@ -380,13 +380,14 @@ def convert_to_sparse(phase, class_type, exp_num):
         save_path = os.path.join(out_path, 'sparse_x_{}'.format(ID))
         x_index = filename.find('x')
         y_filename = filename[:x_index]+'y'+filename[x_index+1:]
-        print('trying to open y file: ', y_filename)
-        y = np.load(y_filename).astype('int')
-        labels.append(y.item())
+        
         #print('labels = : ', labels)
         if(os.path.exists(save_path+'.npz')):
             print('file EXISTS: ', save_path)
             continue
+        print('trying to open y file: ', y_filename)
+        y = np.load(y_filename).astype('int')
+        labels.append(y.item())
         ar = np.load(filename)
         print('loaded array shape: ', ar.shape)
         if(sparse.issparse(ar)): #check if sparse
@@ -423,7 +424,8 @@ def get_sparse_batch(phase, class_type, exp_num):
    '''
   x_batch_list = []
   y_batch_list = []
-  in_data = 'data/{}_{}_sparse/{}'.format(exp_num, class_type, phase)
+  base_path = '/common/deogun/alali/data/neural-image-compression'
+  in_data = '{}/{}_{}_sparse/{}'.format(base_path, exp_num, class_type, phase)
   y_path = os.path.join(in_data, '*y*.npy')
   x_path = os.path.join(in_data, '*x*.npz')
   y_filenames = glob.glob(y_path)
@@ -478,10 +480,39 @@ def get_sparse_batch(phase, class_type, exp_num):
   print('y batch list: ', y_batch_list)
   return x_batch_list, y_batch_list
 
+
+def get_mini_batch(phase, class_type, exp_num, index, batch_size):
+    'returns a mini batch os size len(class_names) without considering balancing the mini batch'
+    base_path = '/common/deogun/alali/data/neural-image-compression'
+    in_data = '{}/{}_{}_sparse/{}'.format(base_path, exp_num, class_type, phase)
+    #sparse_x_53.np
+    x_mini_batch_list = []
+    y_mini_batch_list = []
+    for i in range(batch_size):
+        inner_index = index + i
+        y_path = os.path.join(in_data, 'sparse_y_{}.npy'.format(inner_index))
+        x_path = os.path.join(in_data, 'sparse_x_{}.npz'.format(inner_index))
+        #print('trying to get y={}, x={}'.format(y_path[30:], x_path[30:]))
+        y = np.load(y_path).item()
+        x = sparse.load_npz(x_path)
+        print('[{}/{}]: x={}, y={}'.format(i, batch_size, x_path, y))
+        x_mini_batch_list.append(x)
+        y_mini_batch_list.append(y)
+    #y_path1 = os.path.join(in_data, 'sparse_y_{}.npy'.format(index+1))
+    #x_path1 = os.path.join(in_data, 'sparse_x_{}.npz'.format(index+1))
+    #print('trying to get y={}, x={}'.format(y_path1, x_path1))
+    #y1 = np.load(y_path1).item()
+    #x1 = sparse.load_npz(x_path1)
+
+    #convert to sparse after adding all 8 elements
+    x_mini_batch_sparse = sparse.vstack(np.array(x_mini_batch_list))
+    return x_mini_batch_sparse, np.array(y_mini_batch_list)
+  
 # step 3
 def merge_sparse_data(phase, class_type, exp_num):
-    in_data = 'data/{}_{}_sparse/{}'.format(exp_num, class_type, phase)
-    out_path = 'data/{}_{}_sparse/'.format(exp_num, class_type)
+    base_path = '/common/deogun/alali/data/neural-image-compression'
+    in_data = '{}/{}_{}_sparse/{}'.format(base_path, exp_num, class_type, phase)
+    out_path = '{}/{}_{}_sparse/'.format(base_path, exp_num, class_type)
     data_out_path = os.path.join(out_path, '{}_x_sparse'.format(phase))
     labels_out_path = os.path.join(out_path, '{}_y_sparse'.format(phase))
     if(os.path.exists(data_out_path+'.npz')):
@@ -509,7 +540,7 @@ def merge_sparse_data(phase, class_type, exp_num):
         print('loaded y shape: ', y_ar)
         data.append(ar)
         labels.append(y_ar.item())
-        print('labels: ', labels)
+        #print('labels: ', labels)
     print('data len: ', len(data))
     print('labels len: ', len(labels))
     sparse_data = sparse.vstack(data)
@@ -540,9 +571,6 @@ if(__name__ == "__main__"):
     # step 1
     #save_data_label(args.phase, args.class_type, args.exp_num)
     # step 2
-    convert_to_sparse(args.phase, args.class_type, args.exp_num)
+    #convert_to_sparse(args.phase, args.class_type, args.exp_num)
     # step 3
-    #merge_sparse_data(args.phase, args.class_type, args.exp_num)
-    #convert_to_sparse('valid', 'all', 'bigan')
-    #merge_sparse_data('valid', 'all', 'bigan')
-    #get_sparse_batch(phase='valid', class_type='all', exp_num='vae')
+    merge_sparse_data(args.phase, args.class_type, args.exp_num)

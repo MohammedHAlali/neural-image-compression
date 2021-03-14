@@ -72,20 +72,21 @@ print(title)
 #data, labels = my_data_utils.merge_sparse_data('test', class_type, exp_num)
 #print('loaded sparse data shapes: ', data.shape, labels.shape)
 #exit()
-upper_out = 'out/{}'.format(exp_num)
+base_path = '/common/deogun/alali/data/neural-image-compression'
+upper_out = '{}/{}'.format(base_path, exp_num)
 
 out_dir = '{}/{}'.format(upper_out, model_name)
 while(os.path.exists(out_dir)):
 	model_index += 1
 	model_name = args.model_type+str(model_index)
-	out_dir = 'out/{}/{}'.format(exp_num, model_name)
+	out_dir = '{}/{}'.format(upper_out, model_name)
 
 if(not os.path.exists(out_dir)):
 	os.mkdir(out_dir)
 	print('folder created: ', out_dir)
 
 #sparse data
-p = 'data/{}_{}_sparse'.format(exp_num, class_type)
+p = '{}/{}_{}_sparse'.format(base_path, exp_num, class_type)
 train_sparse_x_path = os.path.join(p, 'train_x_sparse.npz')
 train_sparse_y_path = os.path.join(p, 'train_y_sparse.npy')
 valid_sparse_x_path = os.path.join(p, 'valid_x_sparse.npz')
@@ -97,8 +98,8 @@ print('train path: ', train_sparse_x_path)
 if(args.model_type == 'sgd'):
     #valid_data_list, valid_labels_list = my_data_utils.get_sparse_batch('valid', class_type, exp_num)
     #print('valid data len={}, valid label len={}, valid_data[0].type={} valid_label[0].type={}'.format(len(valid_data_list), len(valid_labels_list), type(valid_data_list[0]), type(valid_labels_list[0])))
-    train_data_list, train_labels_list = my_data_utils.get_sparse_batch('train', class_type, exp_num)
-    print('train data len={}, train label len={}'.format(len(train_data_list), len(train_labels_list)))
+    #train_data_list, train_labels_list = my_data_utils.get_sparse_batch('train', class_type, exp_num)
+    #print('train data len={}, train label len={}'.format(len(train_data_list), len(train_labels_list)))
     #DO NOT merge train and valid data
 
     #for d, l in zip(valid_data_list, valid_labels_list):
@@ -201,21 +202,6 @@ else:
 	print('train mean: ', np.mean(train_x))
 
 
-	#Normalizing the data
-	#Standardize features by removing the mean and scaling to unit variance
-	#scaler = StandardScaler()
-
-	#This way of normalization changes the sparsity level of the data
-	#before this normalization, the sparsity was 95%
-	#after it, sparsity is 31%
-	#Actually, the data is already normalized to be between 0 and 1
-	#maybe we need another method of normalization, but not to decrease sparsity
-
-	#scaler.fit(train_x)
-	#train_x = scaler.transform(train_x)
-	#valid_x = scaler.transform(valid_x)
-	#test_x = scaler.transform(test_x)
-
 	print('calculate sparsity percentage')
 	train_non_zero = np.count_nonzero(train_x)
 	test_non_zero = np.count_nonzero(test_x)
@@ -228,13 +214,6 @@ else:
 	print('train sparsity = {}, train desity = {}'.format(train_sparsity, train_density))
 	print('test sparsity = {}, test density = {}'.format(test_sparsity, test_density))
 
-	#print('stats after normalization')
-	#print('train max: ', np.amax(train_x))
-	#print('train min: ', np.amin(train_x))
-	#print('train mean: ', np.mean(train_x))
-	#print('train shapes: ', train_x.shape, train_y.shape)
-	#print('valid shapes: ', valid_x.shape, valid_y.shape)
-	#print('test shapes: ', test_x.shape, test_y.shape)
 	print('unique labels in train set: ', np.unique(train_y))
 	#print('unique labels in valid set: ', np.unique(valid_y))
 	print('unique labels in test set: ', np.unique(test_y))
@@ -343,25 +322,42 @@ cm = metrics.confusion_matrix(toy_y_test, toy_y_pred)
 print('confusion_matrix of sklearn breast cancer dataset')
 print(cm)
 '''
-
+if(class_type == 'all'):
+	classes = np.array([0, 1, 2, 3, 4, 5, 6, 7])
+else:
+	classes = np.array([0, 1])
+print('classes: ', classes)
 print('training on our dataset')
+batch_size = 10
 if('sgd' in model_name):
-	for ep in range(5):
+	valid_score_list = []
+	for ep in range(10):
 		print('epoch #:', ep)
-		for i in range(len(train_data_list)-1):
-			print('batch: ', i)
+		for i in range(0, 1500, batch_size): #number of train files
+			print('batch: [{}/{}]'.format(i/batch_size, 1500/batch_size)
 			#train_batch_x = np.array([train_data_list[i], train_data_list[i+1]])
-			batch_x = [train_data_list[i], train_data_list[i+1]]
-			train_batch_x = scipy.sparse.vstack(batch_x)
-			train_batch_y = np.array([train_labels_list[i], train_labels_list[i+1]])
-			print('batch data types: ', type(train_batch_x), type(train_batch_y))
-			print('batch data shapes: ', train_batch_x.shape, train_batch_y.shape)
-			if(class_type == 'all'):
-				classes = np.array([0, 1, 2, 3, 4, 5, 6, 7])
-			else:
-				classes = np.array([0, 1])
-			print('classes: ', classes)
+			#batch_x = [train_data_list[i], train_data_list[i+1]]
+			#train_batch_x = scipy.sparse.vstack(batch_x)
+			#train_batch_y = np.array([train_labels_list[i], train_labels_list[i+1]])
+			train_batch_x, train_batch_y = my_data_utils.get_mini_batch('train', 
+									class_type, exp_num, i, batch_size)
+			if(i % 50 == 0):
+				print('batch data types: ', type(train_batch_x), type(train_batch_y))
+				print('batch data shapes: ', train_batch_x.shape, train_batch_y.shape)
 			clf.partial_fit(X=train_batch_x, y=train_batch_y, classes=classes)
+		#run validation predict
+		v_score = clf.score(valid_sparse_x, valid_y)
+		valid_score_list.append(v_score)
+		print('valid score: ', v_score)
+	#plot validation score
+	plt.plot(valid_score_list)
+	plt.title('Validation score per epoch')
+	plt.ylabel('validation score')
+	plt.xlabel('epoch')
+	img_name = '{}/{}_{}_vscore_{}.png'.format(out_dir, model_name, exp_num, now)
+	plt.savefig(img_name, dpi=300)
+	print('figure saved: ', img_name)
+	plt.close()	
 else:
 	clf.fit(train_sparse_x, train_y)
 
